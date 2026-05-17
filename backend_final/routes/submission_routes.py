@@ -262,9 +262,6 @@ def get_my_submissions(
         assessment = db.query(models.Assessment).filter(
             models.Assessment.id == s.assessment_id
         ).first()
-        cert = db.query(models.Certificate).filter(
-            models.Certificate.submission_id == s.id
-        ).first()
 
         result.append({
             "id": s.id,
@@ -273,8 +270,6 @@ def get_my_submissions(
             "assessment_emoji": assessment.thumbnail_emoji if assessment else "📚",
             "total_score": s.total_score,
             "submitted_at": s.submitted_at,
-            "has_certificate": cert is not None,
-            "certificate_id": cert.id if cert else None,
             "risk_level": (s.anticheat_flags or {}).get("risk_level", "low")
         })
 

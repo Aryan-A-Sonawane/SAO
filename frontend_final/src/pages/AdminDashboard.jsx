@@ -403,7 +403,6 @@ export default function AdminDashboard() {
           <StatCard icon="👥" iconClass="indigo" value={overview.total_users} label="Students" />
           <StatCard icon="📋" iconClass="violet" value={overview.total_assessments} label="Assessments" />
           <StatCard icon="📝" iconClass="cyan" value={overview.total_submissions} label="Submissions" />
-          <StatCard icon="🏅" iconClass="green" value={overview.total_certificates} label="Certificates" />
         </motion.div>
       )}
 

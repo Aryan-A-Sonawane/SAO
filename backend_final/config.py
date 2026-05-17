@@ -29,7 +29,6 @@ class Settings(BaseSettings):
 
     # Uploads
     UPLOAD_DIR: str = "uploads"
-    CERT_DIR: str = "certificates"
     MAX_PDF_SIZE_MB: int = 20
 
     # Frontend URL (for QR code verification links)

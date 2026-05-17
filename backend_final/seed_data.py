@@ -334,18 +334,6 @@ def seed(db: Session):
     db.add(sample_submission)
     db.flush()
 
-    # Create a certificate for the demo submission
-    import hashlib
-    qr_hash = hashlib.sha256(f"demo_cert_{sample_submission.id}".encode()).hexdigest()[:32]
-    cert = models.Certificate(
-        user_id=students[0].id,
-        submission_id=sample_submission.id,
-        cert_filename=f"cert_{qr_hash}.png",
-        qr_hash=qr_hash,
-        is_valid=True
-    )
-    db.add(cert)
-
     # Create pathway step
     pathway = models.PathwayStep(
         user_id=students[0].id,
@@ -357,7 +345,7 @@ def seed(db: Session):
     db.add(pathway)
 
     db.commit()
-    print(f"✅ Seeded: 4 users, {len(DEMO_ASSESSMENTS)} assessments, 1 demo submission, 1 certificate")
+    print(f"Seeded: 4 users, {len(DEMO_ASSESSMENTS)} assessments, 1 demo submission")
 
 
 if __name__ == "__main__":

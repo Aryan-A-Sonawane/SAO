@@ -22,7 +22,7 @@ const STEPS = [
   { step: '01', icon: '📄', title: 'Upload PDF', desc: 'Drop any PDF chapter — textbook, case study, or custom document.' },
   { step: '02', icon: '🤖', title: 'AI Generates', desc: 'Gemini AI creates higher-order questions from the content instantly.' },
   { step: '03', icon: '✍️', title: 'Student Responds', desc: 'Write, explain, or record verbal answers demonstrating mastery.' },
-  { step: '04', icon: '🏅', title: 'Earn Certificate', desc: 'Get AI-evaluated scores, detailed feedback, and a verifiable credential.' },
+  { step: '04', icon: '📊', title: 'Get Feedback', desc: 'Get AI-evaluated scores and detailed feedback to guide your improvement.' },
 ]
 
 function WorkflowSection() {

@@ -21,7 +21,7 @@ def get_db():
 
 
 def create_tables():
-    from models import User, PDF, Assessment, Submission, Certificate, PathwayStep, UserBadge, XPLog
+    from models import User, PDF, Assessment, Submission, PathwayStep, UserBadge, XPLog
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_user_columns()
     _migrate_learning_paths_multi_role()

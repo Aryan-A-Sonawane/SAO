@@ -40,13 +40,6 @@ const FEATURES = [
         art: 'wave',
     },
     {
-        icon: '🏅',
-        title: 'Verifiable Certificates',
-        desc: 'Earn QR-verified credentials. Share with employers instantly.',
-        tag: 'Blockchain-ready',
-        art: null,
-    },
-    {
         icon: '🔒',
         title: 'Anti-Cheat Integrity',
         desc: 'Plagiarism detection, originality scoring, and browser monitoring ensure every submission is authentic and trusted.',

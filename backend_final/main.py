@@ -2,11 +2,10 @@ import os
 import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from config import settings
 from database import create_tables
-from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, certificate_routes, analytics_routes, user_routes, gamification_routes, interview_routes, planner_routes, track_routes, remediation_routes, classroom_routes, company_routes, learning_path_routes, onboarding_routes, topic_routes, diagnostic_routes, interview_session_routes
+from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, analytics_routes, user_routes, gamification_routes, interview_routes, planner_routes, track_routes, remediation_routes, classroom_routes, company_routes, learning_path_routes, onboarding_routes, topic_routes, diagnostic_routes, interview_session_routes
 
 # ─── Add SkillSync backend to Python path ────────────────────────────────────
 SKILLSYNC_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skillsync_coding")
@@ -20,7 +19,6 @@ async def lifespan(app: FastAPI):
     print(f"[START] Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     create_tables()
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    os.makedirs(settings.CERT_DIR, exist_ok=True)
 
     # Auto-seed demo data if DB is empty
     try:
@@ -73,7 +71,6 @@ app.include_router(auth_routes.router)
 app.include_router(pdf_routes.router)
 app.include_router(assessment_routes.router)
 app.include_router(submission_routes.router)
-app.include_router(certificate_routes.router)
 app.include_router(analytics_routes.router)
 app.include_router(user_routes.router)
 app.include_router(gamification_routes.router)
@@ -88,10 +85,6 @@ app.include_router(onboarding_routes.router)
 app.include_router(topic_routes.router)
 app.include_router(diagnostic_routes.router)
 app.include_router(interview_session_routes.router)
-
-# Serve certificate files
-if os.path.exists(settings.CERT_DIR):
-    app.mount("/certificates", StaticFiles(directory=settings.CERT_DIR), name="certificates")
 
 # ─── Mount SkillSync Coding Backend as Sub-Application ──────────────────────
 # All SkillSync routes become available at /api/coding/*

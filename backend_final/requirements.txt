@@ -10,7 +10,6 @@ python-multipart==0.0.9
 pdfplumber==0.10.3
 google-generativeai==0.4.1
 pillow==10.1.0
-qrcode[pil]==7.4.2
 openai-whisper
 langdetect==1.0.9
 sentence-transformers==2.4.0

@@ -18,8 +18,6 @@ export default function AssessmentResult() {
   const navigate = useNavigate()
   const { t } = useLang()
   const [data, setData] = useState(location.state || null)
-  const [certLoading, setCertLoading] = useState(false)
-  const [certResult, setCertResult] = useState(null)
   const [loading, setLoading] = useState(!location.state)
 
   useEffect(() => {
@@ -41,17 +39,6 @@ export default function AssessmentResult() {
   )
 
   const { total_score, scores, feedback, confidence_scores, anticheat, pathway, xp_gained, proctoring } = data
-
-  const generateCert = async () => {
-    setCertLoading(true)
-    try {
-      const res = await api.post(`/certificates/generate/${data.submission_id || submissionId}`)
-      setCertResult(res.data)
-    } catch (err) {
-      setCertResult({ error: err.response?.data?.detail || 'Certificate generation failed' })
-    }
-    setCertLoading(false)
-  }
 
   const scoreColor = total_score >= 70 ? 'var(--dk-green)' : total_score >= 40 ? 'var(--dk-amber)' : 'var(--dk-red)'
   const circumference = 2 * Math.PI * 60
@@ -311,88 +298,6 @@ export default function AssessmentResult() {
                 {pathway.estimated_study_hours && <span className="badge">Est. {pathway.estimated_study_hours}h study</span>}
               </div>
             )}
-          </motion.div>
-        )}
-
-        {/* ─── Certificate Section ─────────────────────────────────────────────── */}
-        {total_score >= 40 && !certResult && (
-          <motion.div variants={fadeUp} style={{ textAlign: 'center', marginBottom: 24 }}>
-            <button className="dk-btn dk-btn-primary dk-btn-lg dk-btn-magnetic" onClick={generateCert} disabled={certLoading}>
-              {certLoading ? t('generatingCert') : t('generateCert')}
-            </button>
-          </motion.div>
-        )}
-
-        {/* Blockchain Certificate Card */}
-        {certResult && !certResult.error && (
-          <motion.div variants={fadeUp} className="dk-card" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
-            {/* Header strip */}
-            <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.15), rgba(34,211,238,0.1))', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--dk-border)' }}>
-              <div>
-                <h3 style={{ margin: 0, color: 'var(--dk-text)', fontSize: 18 }}>{t('blockchainVerified')}</h3>
-                <p style={{ margin: '4px 0 0', color: 'var(--dk-text-muted)', fontSize: 12 }}>SHA-256 Hashed | QR Verified | Immutable</p>
-              </div>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-                🔗
-              </div>
-            </div>
-
-            <div style={{ padding: 24 }}>
-              {/* Certificate hash */}
-              <div style={{ background: 'var(--dk-surface-2)', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontFamily: "'Geist Mono', monospace", border: '1px solid var(--dk-border)' }}>
-                <div style={{ fontSize: 11, color: 'var(--dk-text-muted)', marginBottom: 4 }}>{t('certHash')} (SHA-256)</div>
-                <div style={{ fontSize: 13, color: 'var(--dk-primary-light)', wordBreak: 'break-all', fontWeight: 600 }}>
-                  0x{certResult.qr_hash}
-                </div>
-              </div>
-
-              {/* Details grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--dk-surface-2)', border: '1px solid var(--dk-border)' }}>
-                  <div style={{ fontSize: 11, color: 'var(--dk-text-muted)' }}>{t('issuedOn')}</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--dk-text)' }}>{new Date(certResult.issued_at).toLocaleDateString()}</div>
-                </div>
-                <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--dk-surface-2)', border: '1px solid var(--dk-border)' }}>
-                  <div style={{ fontSize: 11, color: 'var(--dk-text-muted)' }}>{t('score')}</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: scoreColor }}>{total_score?.toFixed(1)}%</div>
-                </div>
-              </div>
-
-              {/* QR & Actions */}
-              <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ background: '#fff', padding: 8, borderRadius: 10, flexShrink: 0 }}>
-                  <img
-                    src={certResult.cert_url}
-                    alt="Certificate"
-                    style={{ width: 100, height: 100, objectFit: 'contain', borderRadius: 4 }}
-                    onError={(e) => { e.target.style.display = 'none' }}
-                  />
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <a href={certResult.cert_url} target="_blank" rel="noopener noreferrer" className="dk-btn dk-btn-primary"
-                    style={{ textAlign: 'center', textDecoration: 'none', fontSize: 14 }}>
-                    {t('downloadCert')}
-                  </a>
-                  <a href={`/api/certificates/verify/${certResult.qr_hash}`} target="_blank" rel="noopener noreferrer"
-                    className="dk-btn dk-btn-ghost" style={{ textAlign: 'center', textDecoration: 'none', fontSize: 13 }}>
-                    🔍 {t('verifyOn')}
-                  </a>
-                </div>
-              </div>
-
-              {/* Blockchain info */}
-              <div style={{ marginTop: 16, padding: '10px 14px', borderRadius: 10, border: '1px dashed var(--dk-border)', fontSize: 12, color: 'var(--dk-text-muted)' }}>
-                <strong>Blockchain Verification:</strong> This certificate is secured with a SHA-256 cryptographic hash.
-                The QR code on the certificate links to our verification API. Any tampering will invalidate the hash,
-                ensuring the certificate's authenticity cannot be forged.
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {certResult?.error && (
-          <motion.div variants={fadeUp} className="dk-card" style={{ textAlign: 'center', borderColor: 'var(--dk-red)', marginBottom: 24 }}>
-            <p style={{ color: 'var(--dk-red)' }}>{certResult.error}</p>
           </motion.div>
         )}
 

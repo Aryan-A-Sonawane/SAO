@@ -89,7 +89,6 @@ export const DEMO_ADMIN_OVERVIEW = {
     total_users: 247,
     total_assessments: 34,
     total_submissions: 1893,
-    total_certificates: 412,
 }
 
 export const DEMO_STUDENT_ANALYTICS = {

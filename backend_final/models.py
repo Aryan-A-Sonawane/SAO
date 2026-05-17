@@ -31,7 +31,6 @@ class User(Base):
 
     pdfs = relationship("PDF", back_populates="uploader")
     submissions = relationship("Submission", back_populates="user")
-    certificates = relationship("Certificate", back_populates="user")
     badges = relationship("UserBadge", back_populates="user", lazy="dynamic")
     xp_logs = relationship("XPLog", back_populates="user", lazy="dynamic")
 
@@ -95,22 +94,6 @@ class Submission(Base):
 
     user = relationship("User", back_populates="submissions")
     assessment = relationship("Assessment", back_populates="submissions")
-    certificate = relationship("Certificate", back_populates="submission", uselist=False)
-
-
-class Certificate(Base):
-    __tablename__ = "certificates"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    submission_id = Column(Integer, ForeignKey("submissions.id"))
-    cert_filename = Column(String(500))
-    qr_hash = Column(String(64), unique=True, index=True)
-    issued_at = Column(DateTime, default=datetime.utcnow)
-    is_valid = Column(Boolean, default=True)
-
-    user = relationship("User", back_populates="certificates")
-    submission = relationship("Submission", back_populates="certificate")
 
 
 class PathwayStep(Base):

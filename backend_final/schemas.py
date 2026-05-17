@@ -142,21 +142,6 @@ class SubmissionResponse(BaseModel):
         from_attributes = True
 
 
-# ─── Certificate Schemas ───────────────────────────────────────────────────────
-
-class CertificateResponse(BaseModel):
-    id: int
-    user_id: int
-    submission_id: int
-    qr_hash: str
-    issued_at: datetime
-    is_valid: bool
-    cert_url: str = ""
-
-    class Config:
-        from_attributes = True
-
-
 # ─── Analytics Schemas ────────────────────────────────────────────────────────
 
 class SkillRadarData(BaseModel):

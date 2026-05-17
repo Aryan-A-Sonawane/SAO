@@ -4,7 +4,7 @@ import { useScrollAnimation } from '../../hooks/useScrollAnimation'
 
 /**
  * PlaygroundSection — glassmorphic terminal window simulating the platform.
- * Has three tabs: Terminal (typewriter), Results, Certificate.
+ * Has two tabs: Terminal (typewriter), Results.
  * Typewriter starts when scrolled into view.
  */
 
@@ -131,60 +131,7 @@ function ResultsTab() {
     )
 }
 
-function CertificateTab() {
-    return (
-        <div className="lp-terminal-body">
-            <motion.div
-                style={{
-                    border: '1px solid rgba(99,102,241,0.3)',
-                    borderRadius: 16,
-                    padding: '32px',
-                    textAlign: 'center',
-                    background: 'radial-gradient(ellipse at 50% -20%, rgba(99,102,241,0.1) 0%, transparent 60%)',
-                }}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, ease: easeOutExpo }}
-            >
-                <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🏅</div>
-                <div style={{
-                    fontSize: '1.1rem', fontWeight: 700, color: '#f1f5f9',
-                    marginBottom: 6, letterSpacing: '-0.02em',
-                }}>
-                    Certificate of Skill Mastery
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 20 }}>
-                    Computer Networks — Advanced Level
-                </div>
-                <div style={{
-                    display: 'inline-flex', gap: 32, padding: '14px 28px',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 12,
-                }}>
-                    {[
-                        ['Score', '87/100'],
-                        ['Rank', 'Top 12%'],
-                        ['Issued', '2026-03-06'],
-                    ].map(([k, v]) => (
-                        <div key={k} style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{k}</div>
-                            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f1f5f9' }}>{v}</div>
-                        </div>
-                    ))}
-                </div>
-                <div style={{
-                    marginTop: 20, fontSize: '0.75rem', color: '#6366f1',
-                    fontFamily: 'var(--lp-mono)',
-                }}>
-                    ✓ QR Verified  |  ID: KAI-2026-NET-87-42F
-                </div>
-            </motion.div>
-        </div>
-    )
-}
-
-const TABS = ['Terminal', 'Results', 'Certificate']
+const TABS = ['Terminal', 'Results']
 
 export default function PlaygroundSection() {
     const [activeTab, setActiveTab] = useState('Terminal')
@@ -253,7 +200,6 @@ export default function PlaygroundSection() {
                     >
                         {activeTab === 'Terminal' && <TerminalTab started={inView} />}
                         {activeTab === 'Results' && <ResultsTab />}
-                        {activeTab === 'Certificate' && <CertificateTab />}
                     </motion.div>
                 </AnimatePresence>
             </motion.div>

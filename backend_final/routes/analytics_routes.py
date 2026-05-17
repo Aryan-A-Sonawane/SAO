@@ -208,7 +208,6 @@ def admin_overview(
     total_users = db.query(models.User).filter(models.User.role == "student").count()
     total_assessments = db.query(models.Assessment).filter(models.Assessment.is_active == True).count()
     total_submissions = db.query(models.Submission).count()
-    total_certs = db.query(models.Certificate).filter(models.Certificate.is_valid == True).count()
 
     all_scores = db.query(models.Submission.total_score).all()
     avg_platform_score = sum(s[0] for s in all_scores) / len(all_scores) if all_scores else 0
@@ -221,7 +220,6 @@ def admin_overview(
         "total_users": total_users,
         "total_assessments": total_assessments,
         "total_submissions": total_submissions,
-        "total_certificates": total_certs,
         "avg_platform_score": round(avg_platform_score, 1),
         "top_students": [
             {"name": u.name, "xp": u.xp_points, "email": u.email}
