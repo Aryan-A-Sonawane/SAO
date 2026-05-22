@@ -265,7 +265,7 @@ function Divider() {
 
 
 // ─── Camera capture ────────────────────────────────────────────────────────
-function CameraCapture({ onBlobChange }) {
+function CameraCapture({ onBlobChange, existingStream = null }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const [status, setStatus] = useState('idle')  // idle | active | error
@@ -274,6 +274,18 @@ function CameraCapture({ onBlobChange }) {
 
   useEffect(() => {
     let mounted = true
+
+    if (existingStream) {
+      // Reuse the caller's stream — no extra permission request, no extra track
+      streamRef.current = existingStream
+      if (videoRef.current) {
+        videoRef.current.srcObject = existingStream
+        videoRef.current.play().catch(() => {})
+      }
+      setStatus('active')
+      return () => { mounted = false }  // don't stop external stream
+    }
+
     ;(async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -299,7 +311,7 @@ function CameraCapture({ onBlobChange }) {
       mounted = false
       streamRef.current?.getTracks().forEach((t) => t.stop())
     }
-  }, [])
+  }, [existingStream])
 
   const grabFrame = () => {
     const v = videoRef.current
@@ -409,7 +421,7 @@ const btnSecondary = {
   cursor: 'pointer',
 }
 
-export default function CaptureModal({ open, onClose, sessionId, currentQuestion, onResult }) {
+export default function CaptureModal({ open, onClose, sessionId, currentQuestion, onResult, cameraStream = null }) {
   const [tab, setTab] = useState('whiteboard')        // 'whiteboard' | 'camera'
   const [blob, setBlob] = useState(null)
   const [explanation, setExplanation] = useState('')
@@ -522,7 +534,7 @@ export default function CaptureModal({ open, onClose, sessionId, currentQuestion
             {/* Capture surface */}
             {tab === 'whiteboard'
               ? <Whiteboard onBlobChange={setBlob} />
-              : <CameraCapture onBlobChange={setBlob} />
+              : <CameraCapture onBlobChange={setBlob} existingStream={cameraStream} />
             }
 
             {/* Explanation */}

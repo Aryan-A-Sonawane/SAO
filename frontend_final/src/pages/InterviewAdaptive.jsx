@@ -1352,6 +1352,23 @@ function FaceInsightChip({ label, value, ok, neutral = false }) {
   )
 }
 
+// ─── Mic waveform — animated bars visible when voice input is active ─────────
+function MicWaveform() {
+  const BARS = [0.4, 0.8, 1.0, 0.7, 0.5, 0.9, 0.6]
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2, height: 22, flexShrink: 0 }}>
+      {BARS.map((h, i) => (
+        <motion.div
+          key={i}
+          animate={{ height: [`${Math.round(h * 6)}px`, `${Math.round(h * 18)}px`, `${Math.round(h * 6)}px`] }}
+          transition={{ duration: 0.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.07 }}
+          style={{ width: 3, borderRadius: 2, background: '#ef4444' }}
+        />
+      ))}
+    </div>
+  )
+}
+
 // ─── Live screen ────────────────────────────────────────────────────────────
 // PipFeed — fills its parent container (parent controls size via CSS)
 const PipFeed = React.forwardRef(function PipFeed({ stream, label }, forwardedRef) {
@@ -1586,6 +1603,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
 
   // ── Voice Input (SpeechRecognition) ──────────────────────────────────────
   const [isListening, setIsListening] = useState(false)
+  const [interimText, setInterimText] = useState('')
   const recognitionRef = useRef(null)
 
   const toggleVoice = useCallback(() => {
@@ -1595,6 +1613,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
     if (isListening) {
       recognitionRef.current?.stop()
       setIsListening(false)
+      setInterimText('')
       return
     }
     // Pause TTS so mic doesn't pick up the interviewer
@@ -1603,22 +1622,24 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
 
     const rec = new SR()
     rec.continuous = true
-    rec.interimResults = false
+    rec.interimResults = true
     rec.lang = 'en-IN'
     rec.onresult = (e) => {
-      const words = Array.from(e.results)
-        .map((r) => r[0].transcript)
-        .join(' ')
-        .trim()
-      if (words) {
-        setAnswerText((prev) => prev ? prev + ' ' + words : words)
+      let finalWords = ''
+      let interim = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalWords += e.results[i][0].transcript
+        else interim += e.results[i][0].transcript
       }
+      if (finalWords.trim()) setAnswerText((prev) => prev ? prev + ' ' + finalWords.trim() : finalWords.trim())
+      setInterimText(interim)
     }
     rec.onerror = (e) => {
       if (e.error !== 'no-speech') toast.error(`Voice error: ${e.error}`)
       setIsListening(false)
+      setInterimText('')
     }
-    rec.onend = () => setIsListening(false)
+    rec.onend = () => { setIsListening(false); setInterimText('') }
     rec.start()
     recognitionRef.current = rec
     setIsListening(true)
@@ -1770,10 +1791,8 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
   const topAlertOk = topCamAlert === null
 
   return (
-    // Full-viewport container — DarkLayout sets padding:0 when sidebarCollapsed
-    <div style={{
-      display: 'flex', gap: 0, height: '100vh',
-    }}>
+    <div style={{ display: 'flex', gap: 0, height: '100vh' }}>
+
       {/* ── Main interview area ─────────────────────────────────────────────── */}
       <div style={{
         flex: 1, minWidth: 0,
@@ -1782,36 +1801,34 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         padding: '16px 16px 16px 20px',
       }}>
 
-        {/* ═══ TOP: Zoom-style video tiles ═══════════════════════════════════ */}
+        {/* ═══ VIDEO GRID ═════════════════════════════════════════════════════ */}
         {!endReason && (
-          <div style={{ marginBottom: 12, flexShrink: 0 }}>
+          <div style={{
+            flex: 1, minHeight: 0,
+            display: 'grid', gridTemplateColumns: '1fr 1fr',
+            gap: 12, marginBottom: 10,
+          }}>
 
-            {/* Primary tiles row — Avatar + Front camera equal-width */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 12,
-              marginBottom: 10,
-            }}>
-              {/* ── AI Avatar tile ── */}
+            {/* ── Left col: AI Avatar + Current Question ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+
+              {/* Avatar tile */}
               <div style={{
-                position: 'relative',
+                position: 'relative', flexShrink: 0,
                 background: 'linear-gradient(160deg, #0d0d1f 0%, #0a0a18 100%)',
                 border: '1px solid rgba(99,102,241,0.2)',
-                borderRadius: 16,
-                aspectRatio: '16/9',
+                borderRadius: 16, aspectRatio: '16/9',
                 display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center',
                 overflow: 'hidden',
                 boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
               }}>
-                {/* Subtle glow behind avatar */}
                 <div style={{
                   position: 'absolute', inset: 0,
                   background: 'radial-gradient(ellipse at 50% 60%, rgba(99,102,241,0.12) 0%, transparent 65%)',
                   pointerEvents: 'none',
                 }} />
-                <HumanAvatar isSpeaking={isSpeaking} size={160} />
+                <HumanAvatar isSpeaking={isSpeaking} size={140} />
                 <AnimatePresence>
                   {isSpeaking && (
                     <motion.div
@@ -1833,7 +1850,6 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* Name badge */}
                 <div style={{
                   position: 'absolute', bottom: 10, left: 12,
                   padding: '3px 10px', borderRadius: 6,
@@ -1842,42 +1858,68 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                 }}>
                   AI Interviewer
                 </div>
-                {/* Question topic chip top-right */}
-                {currentQ && (
-                  <div style={{
-                    position: 'absolute', top: 10, right: 12,
-                    padding: '3px 10px', borderRadius: 6,
-                    background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(99,102,241,0.25)',
-                    fontSize: 10, color: '#a5b4fc', fontWeight: 700,
-                    textTransform: 'uppercase', letterSpacing: 0.6, maxWidth: 160,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {currentQ.topic}
-                    {currentQ.difficulty && ` · ${currentQ.difficulty}`}
-                  </div>
-                )}
               </div>
 
-              {/* ── User front camera tile ── */}
+              {/* Current question panel */}
               <div style={{
-                position: 'relative',
+                flex: 1, minHeight: 0,
+                background: 'rgba(99,102,241,0.04)',
+                border: '1px solid rgba(99,102,241,0.12)',
+                borderRadius: 12, padding: '14px 16px',
+                overflowY: 'auto',
+                display: 'flex', flexDirection: 'column', justifyContent: 'center',
+              }}>
+                {currentQ ? (
+                  <>
+                    <div style={{ fontSize: 10, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
+                      Current question
+                    </div>
+                    <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.65, fontFamily: 'Inter, system-ui' }}>
+                      {currentQ.text}
+                    </div>
+                    {(currentQ.topic || currentQ.difficulty || currentQ.requires_diagram) && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                        {currentQ.topic && (
+                          <span style={{ padding: '2px 8px', borderRadius: 5, background: 'rgba(99,102,241,0.15)', fontSize: 11, color: '#a5b4fc', fontWeight: 700 }}>
+                            {currentQ.topic}
+                          </span>
+                        )}
+                        {currentQ.difficulty && (
+                          <span style={{ padding: '2px 8px', borderRadius: 5, background: 'rgba(168,85,247,0.12)', fontSize: 11, color: '#c084fc', fontWeight: 700 }}>
+                            {currentQ.difficulty}
+                          </span>
+                        )}
+                        {currentQ.requires_diagram && (
+                          <span style={{ padding: '2px 8px', borderRadius: 5, background: 'rgba(16,185,129,0.12)', fontSize: 11, color: '#34d399', fontWeight: 700 }}>
+                            Diagram
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ color: '#475569', fontSize: 13 }}>Waiting for first question…</span>
+                )}
+              </div>
+            </div>
+
+            {/* ── Right col: Front cam large + Top/Side row below ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+
+              {/* Front camera — fills remaining height */}
+              <div style={{
+                flex: 1, minHeight: 0, position: 'relative',
                 background: '#080812',
                 border: `2px solid ${faceAnalysis?.gazeDirect ? 'rgba(16,185,129,0.45)' : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 16,
-                aspectRatio: '16/9',
-                overflow: 'hidden',
+                borderRadius: 16, overflow: 'hidden',
                 boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
                 transition: 'border-color 0.5s',
               }}>
                 <video
                   ref={videoRef}
                   autoPlay muted playsInline
-                  style={{
-                    width: '100%', height: '100%',
-                    objectFit: 'cover', display: 'block',
-                  }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
-                {/* Name badge */}
                 <div style={{
                   position: 'absolute', bottom: 10, left: 12,
                   padding: '3px 10px', borderRadius: 6,
@@ -1886,201 +1928,94 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                 }}>
                   You · Front
                 </div>
-                {/* Live face-analysis chips overlay (bottom strip) */}
                 {faceAnalysis && (
                   <div style={{
                     position: 'absolute', bottom: 10, right: 10,
                     display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end',
                     maxWidth: '60%',
                   }}>
-                    <FaceInsightChip
-                      label="Eye contact"
-                      value={faceAnalysis.gazeDirect ? 'Good' : 'Look at cam'}
-                      ok={faceAnalysis.gazeDirect}
-                    />
-                    <FaceInsightChip
-                      label="Head"
-                      value={faceAnalysis.uprightHead ? 'Upright' : 'Tilted'}
-                      ok={faceAnalysis.uprightHead}
-                    />
-                    <FaceInsightChip
-                      label={capitalize(faceAnalysis.expr)}
-                      value={`${faceAnalysis.confidence}%`}
-                      ok={faceAnalysis.expr === 'neutral' || faceAnalysis.expr === 'happy'}
-                      neutral={faceAnalysis.expr === 'neutral'}
-                    />
+                    <FaceInsightChip label="Eye contact" value={faceAnalysis.gazeDirect ? 'Good' : 'Look at cam'} ok={faceAnalysis.gazeDirect} />
+                    <FaceInsightChip label="Head" value={faceAnalysis.uprightHead ? 'Upright' : 'Tilted'} ok={faceAnalysis.uprightHead} />
+                    <FaceInsightChip label={capitalize(faceAnalysis.expr)} value={`${faceAnalysis.confidence}%`} ok={faceAnalysis.expr === 'neutral' || faceAnalysis.expr === 'happy'} neutral={faceAnalysis.expr === 'neutral'} />
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* ── Secondary camera row: Top (anti-cheat) + Side (posture/motion) ── */}
-            {(cameraStreams.top || cameraStreams.side) && (
-              <div style={{
-                display: 'flex', gap: 12,
-                flexWrap: 'wrap',
-              }}>
-                {/* Top camera tile */}
-                {cameraStreams.top && (
-                  <div style={{
-                    flex: '1 1 200px', minWidth: 180, maxWidth: 260,
-                    background: '#060610',
-                    border: `1px solid ${topAlertOk ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.4)'}`,
-                    borderRadius: 12, overflow: 'hidden', position: 'relative',
-                    transition: 'border-color 0.4s',
-                  }}>
-                    <PipFeed
-                      ref={topVideoRef}
-                      stream={cameraStreams.top}
-                      label={null}
-                    />
-                    {/* Status bar overlay */}
+              {/* Top + Side cams — compact row below front cam */}
+              {(cameraStreams.top || cameraStreams.side) && (
+                <div style={{ flexShrink: 0, display: 'flex', gap: 10, height: 120 }}>
+                  {cameraStreams.top && (
                     <div style={{
-                      position: 'absolute', bottom: 0, left: 0, right: 0,
-                      padding: '6px 10px',
-                      background: 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, transparent 100%)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      flex: 1, minWidth: 0,
+                      background: '#060610',
+                      border: `1px solid ${topAlertOk ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.4)'}`,
+                      borderRadius: 10, overflow: 'hidden', position: 'relative',
+                      transition: 'border-color 0.4s',
                     }}>
-                      <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                        📷 Top · Anti-cheat
-                      </span>
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
-                        color: topAlertOk ? '#34d399' : '#f87171',
-                        background: topAlertOk ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.15)',
-                        padding: '1px 6px', borderRadius: 4,
-                      }}>
-                        {topAlertLabel}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Side camera tile */}
-                {cameraStreams.side && (
-                  <div style={{
-                    flex: '1 1 200px', minWidth: 180, maxWidth: 260,
-                    background: '#060610',
-                    border: '1px solid rgba(168,85,247,0.2)',
-                    borderRadius: 12, overflow: 'hidden', position: 'relative',
-                  }}>
-                    <PipFeed
-                      ref={sideVideoRef}
-                      stream={cameraStreams.side}
-                      label={null}
-                    />
-                    {/* Multi-line analysis overlay */}
-                    <div style={{
-                      position: 'absolute', bottom: 0, left: 0, right: 0,
-                      padding: '6px 10px',
-                      background: 'linear-gradient(0deg, rgba(0,0,0,0.78) 0%, transparent 100%)',
-                    }}>
-                      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>
-                        👤 Side · Body Language
-                      </div>
-                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        {sidePosture.upright !== null && (
-                          <FaceInsightChip
-                            label="Posture"
-                            value={sidePosture.upright ? 'Upright' : 'Slouching'}
-                            ok={sidePosture.upright}
-                          />
-                        )}
-                        {sidePosture.hands !== 'unknown' && (
-                          <FaceInsightChip
-                            label="Hands"
-                            value={sidePosture.hands === 'moving' ? 'Fidgeting' : 'Still'}
-                            ok={sidePosture.hands !== 'moving'}
-                          />
-                        )}
-                        {sidePosture.legs !== 'unknown' && (
-                          <FaceInsightChip
-                            label="Legs"
-                            value={sidePosture.legs === 'shaking' ? 'Shaking' : 'Still'}
-                            ok={sidePosture.legs !== 'shaking'}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Remaining space — question text summary */}
-                <div style={{
-                  flex: '2 1 280px', minWidth: 200,
-                  background: 'rgba(99,102,241,0.04)',
-                  border: '1px solid rgba(99,102,241,0.12)',
-                  borderRadius: 12, padding: '12px 14px',
-                  display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                }}>
-                  {currentQ ? (
-                    <>
-                      <div style={{ fontSize: 10, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
-                        Current question
-                      </div>
+                      <PipFeed ref={topVideoRef} stream={cameraStreams.top} label={null} />
                       <div style={{
-                        fontSize: 13, color: '#cbd5e1', lineHeight: 1.55,
-                        display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                        position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px 8px',
+                        background: 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, transparent 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       }}>
-                        {currentQ.text}
+                        <span style={{ fontSize: 9, color: '#64748b', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>📷 Top</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: topAlertOk ? '#34d399' : '#f87171', background: topAlertOk ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.15)', padding: '1px 5px', borderRadius: 4 }}>
+                          {topAlertLabel}
+                        </span>
                       </div>
-                    </>
-                  ) : (
-                    <span style={{ color: '#475569', fontSize: 13 }}>—</span>
+                    </div>
+                  )}
+                  {cameraStreams.side && (
+                    <div style={{
+                      flex: 1, minWidth: 0,
+                      background: '#060610',
+                      border: '1px solid rgba(168,85,247,0.2)',
+                      borderRadius: 10, overflow: 'hidden', position: 'relative',
+                    }}>
+                      <PipFeed ref={sideVideoRef} stream={cameraStreams.side} label={null} />
+                      <div style={{
+                        position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px 8px',
+                        background: 'linear-gradient(0deg, rgba(0,0,0,0.78) 0%, transparent 100%)',
+                      }}>
+                        <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 2 }}>👤 Side</div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {sidePosture.upright !== null && <FaceInsightChip label="Posture" value={sidePosture.upright ? 'Upright' : 'Slouching'} ok={sidePosture.upright} />}
+                          {sidePosture.hands !== 'unknown' && <FaceInsightChip label="Hands" value={sidePosture.hands === 'moving' ? 'Fidgeting' : 'Still'} ok={sidePosture.hands !== 'moving'} />}
+                          {sidePosture.legs !== 'unknown' && <FaceInsightChip label="Legs" value={sidePosture.legs === 'shaking' ? 'Shaking' : 'Still'} ok={sidePosture.legs !== 'shaking'} />}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
-        {/* ═══ MIDDLE: Transcript ════════════════════════════════════════════ */}
-        <div
-          ref={scrollerRef}
-          style={{
-            flex: 1, minHeight: 0,
-            background: 'rgba(10,10,18,0.5)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: 14, padding: '14px 16px',
-            overflowY: 'auto',
-            marginBottom: 10,
-          }}
-        >
-          {transcript.length === 0 ? (
-            <div style={{ color: '#64748b', textAlign: 'center', padding: 32, fontSize: 13 }}>
-              Loading session…
-            </div>
-          ) : (
-            transcript.map((turn, i) => (
-              <Bubble key={i} turn={turn} animate={i === transcript.length - 1} />
-            ))
+        {/* Judgment chip + submitting indicator — above input bar */}
+        <AnimatePresence>
+          {lastJudgment && !submitting && !endReason && (
+            <JudgmentChip
+              key={`j-${transcript.length}`}
+              judgment={lastJudgment.judgment}
+              action={lastJudgment.action}
+              onDismiss={() => setLastJudgment(null)}
+            />
           )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {submitting && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 12, padding: '6px 4px', flexShrink: 0 }}
+            >
+              <Loader2 size={13} className="animate-spin" />
+              Judging your answer + drafting next question…
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          <AnimatePresence>
-            {submitting && (
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 12, padding: '8px 4px' }}
-              >
-                <Loader2 size={13} className="animate-spin" />
-                Judging your answer + drafting next question…
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {lastJudgment && !submitting && (
-              <JudgmentChip
-                key={`j-${transcript.length}`}
-                judgment={lastJudgment.judgment}
-                action={lastJudgment.action}
-                onDismiss={() => setLastJudgment(null)}
-              />
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* ═══ BOTTOM: Answer input ══════════════════════════════════════════ */}
+        {/* ═══ BOTTOM: Mic input + actions ════════════════════════════════════ */}
         {endReason ? (
           <EndBanner endReason={endReason} sessionId={sessionId} />
         ) : (
@@ -2090,12 +2025,29 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
             border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: 14, padding: '12px 14px',
           }}>
+            {/* Mic waveform strip — visible only when voice input is active */}
+            {isListening && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+                padding: '8px 12px', borderRadius: 10,
+                background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+              }}>
+                <MicWaveform />
+                <span style={{ fontSize: 12, color: '#fca5a5', fontWeight: 600 }}>Mic active</span>
+                {interimText && (
+                  <span style={{ fontSize: 12, color: '#475569', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {interimText}
+                  </span>
+                )}
+              </div>
+            )}
+
             <textarea
               ref={textareaRef}
               value={answerText}
               onChange={(e) => setAnswerText(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Type your answer. Be specific — concrete examples beat abstract definitions. Cmd/Ctrl+Enter to submit."
+              placeholder="Type or speak your answer. Cmd/Ctrl+Enter to submit."
               rows={3}
               disabled={submitting}
               style={{
@@ -2107,6 +2059,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                 resize: 'none', lineHeight: 1.6,
               }}
             />
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
               <button
                 onClick={() => setCaptureOpen(true)}
@@ -2116,8 +2069,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                   padding: '8px 12px', borderRadius: 9,
                   background: currentQ?.requires_diagram ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.04)',
                   border: '1px solid ' + (currentQ?.requires_diagram ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.08)'),
-                  color: '#f1f5f9', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  fontFamily: 'Inter, system-ui',
+                  color: '#f1f5f9', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, system-ui',
                 }}
               >
                 <ImagePlus size={13} />
@@ -2134,8 +2086,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                   background: isListening ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.04)',
                   border: '1px solid ' + (isListening ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)'),
                   color: isListening ? '#fca5a5' : '#f1f5f9',
-                  fontSize: 12, fontWeight: 600, fontFamily: 'Inter, system-ui',
-                  transition: 'all 0.2s',
+                  fontSize: 12, fontWeight: 600, fontFamily: 'Inter, system-ui', transition: 'all 0.2s',
                 }}
               >
                 {isListening ? (
@@ -2147,7 +2098,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                     <Mic size={13} />
                   </motion.div>
                 ) : <Mic size={13} />}
-                {isListening ? 'Listening…' : 'Voice'}
+                {isListening ? 'Stop' : 'Voice'}
               </button>
 
               <span style={{ marginLeft: 'auto', color: '#475569', fontSize: 11 }}>
@@ -2176,7 +2127,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         )}
       </div>
 
-      {/* ── Right: Progress sidebar (slimmer in interview mode) ────────────── */}
+      {/* ── Right: Progress sidebar ──────────────────────────────────────────── */}
       <div style={{ flexShrink: 0, width: 220, padding: '16px 16px 16px 0', overflow: 'hidden' }}>
         <ProgressSidebar
           progress={progress}
@@ -2192,6 +2143,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         sessionId={sessionId}
         currentQuestion={currentQ?.text || ''}
         onResult={handleCaptureResult}
+        cameraStream={cameraStreams.top || cameraStreams.front || null}
       />
     </div>
   )
