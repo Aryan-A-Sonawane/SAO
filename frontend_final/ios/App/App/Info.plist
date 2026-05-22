@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>InterviewVault needs camera access for the live interview session and diagram capture.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>InterviewVault needs microphone access so you can speak your answers hands-free.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>InterviewVault uses speech recognition to transcribe your spoken answers during the interview.</string>
 </dict>
 </plist>
