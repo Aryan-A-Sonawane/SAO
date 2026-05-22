@@ -1391,7 +1391,7 @@ const PipFeed = React.forwardRef(function PipFeed({ stream, label }, forwardedRe
     <video
       ref={ref} autoPlay muted playsInline
       style={{
-        width: '100%', aspectRatio: '16/9',
+        width: '100%', height: '100%',
         objectFit: 'cover', display: 'block',
         background: '#060612',
       }}
@@ -1906,9 +1906,9 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
             {/* ── Right col: Front cam large + Top/Side row below ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
 
-              {/* Front camera — fills remaining height */}
+              {/* Front camera — same aspect-ratio as avatar so heights match */}
               <div style={{
-                flex: 1, minHeight: 0, position: 'relative',
+                flexShrink: 0, aspectRatio: '16/9', position: 'relative',
                 background: '#080812',
                 border: `2px solid ${faceAnalysis?.gazeDirect ? 'rgba(16,185,129,0.45)' : 'rgba(255,255,255,0.1)'}`,
                 borderRadius: 16, overflow: 'hidden',
@@ -1941,12 +1941,12 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                 )}
               </div>
 
-              {/* Top + Side cams — compact row below front cam */}
+              {/* Top + Side cams — fill remaining height below front cam */}
               {(cameraStreams.top || cameraStreams.side) && (
-                <div style={{ flexShrink: 0, display: 'flex', gap: 10, height: 120 }}>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 10 }}>
                   {cameraStreams.top && (
                     <div style={{
-                      flex: 1, minWidth: 0,
+                      flex: 1, minWidth: 0, height: '100%',
                       background: '#060610',
                       border: `1px solid ${topAlertOk ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.4)'}`,
                       borderRadius: 10, overflow: 'hidden', position: 'relative',
@@ -1967,7 +1967,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                   )}
                   {cameraStreams.side && (
                     <div style={{
-                      flex: 1, minWidth: 0,
+                      flex: 1, minWidth: 0, height: '100%',
                       background: '#060610',
                       border: '1px solid rgba(168,85,247,0.2)',
                       borderRadius: 10, overflow: 'hidden', position: 'relative',
