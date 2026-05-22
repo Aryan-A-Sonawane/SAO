@@ -99,15 +99,21 @@ def list_sessions(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Paginated history list (lightweight — no transcript)."""
+    """Paginated history list (lightweight — no transcript).
+    Only returns completed sessions so in-progress adaptive sessions don't
+    appear in history while still running."""
+    base_filter = [
+        models.InterviewSession.user_id == current_user.id,
+        models.InterviewSession.status == "completed",
+    ]
     total = (
         db.query(models.InterviewSession)
-        .filter(models.InterviewSession.user_id == current_user.id)
+        .filter(*base_filter)
         .count()
     )
     rows = (
         db.query(models.InterviewSession)
-        .filter(models.InterviewSession.user_id == current_user.id)
+        .filter(*base_filter)
         .order_by(models.InterviewSession.created_at.desc())
         .offset(offset)
         .limit(limit)

@@ -2,6 +2,8 @@
 InterviewVault — Onboarding Routes
 Role selection, resume OCR analysis, and onboarding completion.
 """
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -15,6 +17,7 @@ from services.learning_path_service import (
     get_role_cards, get_standard_path, create_learning_path,
     generate_extended_topics, analyze_resume_for_roles, STANDARD_PATHS
 )
+from services.resume_service import extract_resume_entities, summarize_resume_for_profile
 
 router = APIRouter(prefix="/api/onboarding", tags=["Onboarding"])
 
@@ -74,15 +77,27 @@ async def analyze_resume(
 
     # Save resume text to user
     current_user.resume_text = text[:8000]  # Cap stored text
-    db.commit()
+    current_user.resume_uploaded_at = datetime.utcnow()
 
-    # Analyze with Gemini
+    # Two parallel Gemini analyses, both grounded in the same text:
+    #  - role matches (existing behavior — drives onboarding role suggestions)
+    #  - structured entity extraction (new — drives interview question grounding)
+    # We do both before commit so either failure leaves the DB in a consistent
+    # state, and we never re-extract for the same resume text.
     matches = analyze_resume_for_roles(text)
+    entities = extract_resume_entities(text)
+    current_user.resume_entities = entities
+
+    db.commit()
+    db.refresh(current_user)
 
     return {
         "success": True,
         "matches": matches,
         "resume_excerpt": text[:300] + "..." if len(text) > 300 else text,
+        # New: surface the structured summary so the onboarding UI can show
+        # "We found 3 projects, 12 skills, 2 companies in your resume" etc.
+        "summary": summarize_resume_for_profile(current_user),
     }
 
 

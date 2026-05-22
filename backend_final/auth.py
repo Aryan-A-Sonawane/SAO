@@ -12,13 +12,36 @@ from config import settings
 security = HTTPBearer()
 
 
+# bcrypt's internal limit is 72 bytes; passwords beyond that get truncated.
+# bcrypt 5.0+ raises ValueError on >72-byte inputs, so we proactively truncate
+# (consistently in both hash + verify) to keep behaviour identical to older
+# versions and to never let an exception bubble up from the auth layer.
+_BCRYPT_MAX_BYTES = 72
+
+
+def _to_bcrypt_bytes(password: str) -> bytes:
+    pw = (password or "").encode("utf-8")
+    if len(pw) > _BCRYPT_MAX_BYTES:
+        pw = pw[:_BCRYPT_MAX_BYTES]
+    return pw
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        return bcrypt.checkpw(
+            _to_bcrypt_bytes(plain_password),
+            hashed_password.encode("utf-8"),
+        )
+    except (ValueError, TypeError):
+        # Malformed hash or oversized input — fail closed rather than 500.
+        return False
 
 
 def get_password_hash(password: str) -> str:
     salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+    return bcrypt.hashpw(_to_bcrypt_bytes(password), salt).decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

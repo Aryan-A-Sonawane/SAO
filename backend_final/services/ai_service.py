@@ -4,6 +4,7 @@ import json
 import re
 from typing import List, Dict, Any, Optional
 from config import settings
+from services.llm_router import generate as _router_generate
 
 LANGUAGE_NAMES = {
     "en": "English",
@@ -13,6 +14,13 @@ LANGUAGE_NAMES = {
 
 
 def get_client():
+    """Legacy: returns a direct Gemini client on the primary key.
+
+    Kept for backward compatibility — any new code should call the LLM router
+    (services.llm_router.generate) rather than instantiating clients directly.
+    Direct clients bypass the key-rotation / fallback logic, so they will hit
+    rate limits faster.
+    """
     if not settings.GEMINI_API_KEY:
         return None
     return genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -83,26 +91,24 @@ def _safe_parse_json(raw: str) -> Optional[Any]:
     return None
 
 
-def _generate(prompt: str, json_mode: bool = False) -> Optional[str]:
-    """Call Gemini and return text response. Optionally uses structured JSON mode."""
-    client = get_client()
-    if not client:
-        return None
-    try:
-        config = None
-        if json_mode:
-            config = types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
-        response = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=prompt,
-            config=config
-        )
-        return response.text
-    except Exception as e:
-        print(f"Gemini API error: {e}")
-        return None
+def _generate(
+    prompt: str,
+    json_mode: bool = False,
+    task_type: str = "question_generation",
+) -> Optional[str]:
+    """Call an LLM and return the text response.
+
+    Backward-compatible wrapper around services.llm_router.generate(). The
+    original signature (prompt, json_mode) is preserved, so every existing
+    call site keeps working unchanged. New callers can pass task_type to
+    route specific kinds of work to Claude (vision, post-interview report,
+    language quality) — see TaskType in llm_router.
+
+    The router handles: round-robin across both Gemini keys, per-key cooldown
+    on 429/quota errors, and transparent fallback to Gemini when Claude
+    isn't configured.
+    """
+    return _router_generate(prompt, task_type=task_type, json_mode=json_mode)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

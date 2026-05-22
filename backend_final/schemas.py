@@ -37,6 +37,13 @@ class UserResponse(BaseModel):
     phone: str = ""
     bio: str = ""
     created_at: datetime
+    # Phase 2 additions — lightweight resume/onboarding state. The heavy data
+    # (raw text, full extracted entities) is served separately by
+    # /api/users/resume-summary to keep /me responses small.
+    onboarding_complete: bool = False
+    target_role: str = ""
+    has_resume: bool = False  # computed via User.has_resume @property
+    resume_uploaded_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

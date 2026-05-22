@@ -24,7 +24,39 @@ def create_tables():
     from models import User, PDF, Assessment, Submission, PathwayStep, UserBadge, XPLog
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_user_columns()
+    _ensure_sqlite_interview_session_columns()
     _migrate_learning_paths_multi_role()
+
+
+def _ensure_sqlite_interview_session_columns():
+    """Backfill missing columns on interview_sessions for existing dev DBs.
+
+    Phase 3 adds status/state/target_duration_minutes/ended_at to support the
+    server-side adaptive interview engine. Idempotent — safe to run every
+    startup."""
+    if not str(settings.DATABASE_URL).startswith("sqlite"):
+        return
+
+    required_columns = {
+        "status": "ALTER TABLE interview_sessions ADD COLUMN status VARCHAR(20) DEFAULT 'completed'",
+        "state": "ALTER TABLE interview_sessions ADD COLUMN state JSON",
+        "target_duration_minutes": "ALTER TABLE interview_sessions ADD COLUMN target_duration_minutes INTEGER DEFAULT 30",
+        "ended_at": "ALTER TABLE interview_sessions ADD COLUMN ended_at DATETIME",
+    }
+
+    with engine.begin() as conn:
+        # Table might not exist yet on a fresh DB (create_all will make it
+        # with the right schema). Skip if not present.
+        exists = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='interview_sessions'"
+        )).fetchone()
+        if not exists:
+            return
+
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(interview_sessions)"))}
+        for name, alter_sql in required_columns.items():
+            if name not in existing:
+                conn.execute(text(alter_sql))
 
 
 def _ensure_sqlite_user_columns():
@@ -36,6 +68,10 @@ def _ensure_sqlite_user_columns():
         "onboarding_complete": "ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0",
         "target_role": "ALTER TABLE users ADD COLUMN target_role VARCHAR(100) DEFAULT ''",
         "resume_text": "ALTER TABLE users ADD COLUMN resume_text TEXT DEFAULT ''",
+        # Phase 2: structured resume extraction. JSON column stores the parsed
+        # entities; uploaded_at lets the profile UI show "uploaded 2 days ago".
+        "resume_entities": "ALTER TABLE users ADD COLUMN resume_entities JSON",
+        "resume_uploaded_at": "ALTER TABLE users ADD COLUMN resume_uploaded_at DATETIME",
     }
 
     with engine.begin() as conn:

@@ -32,9 +32,13 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // Emails are stored case-insensitively on the backend; normalize here too so
+  // the form value the user typed always matches the canonical record.
+  const normalizeEmail = (e) => (e || '').trim().toLowerCase()
+
   const login = async (email, password) => {
     sessionStorage.removeItem('demo_user')
-    const res = await api.post('/auth/login', { email, password })
+    const res = await api.post('/auth/login', { email: normalizeEmail(email), password })
     const { access_token, user: userData } = res.data
     localStorage.setItem('sf_token', access_token)
     localStorage.setItem('sf_user', JSON.stringify(userData))
@@ -45,7 +49,12 @@ export function AuthProvider({ children }) {
 
   const register = async (email, name, password, role = 'student') => {
     sessionStorage.removeItem('demo_user')
-    const res = await api.post('/auth/register', { email, name, password, role })
+    const res = await api.post('/auth/register', {
+      email: normalizeEmail(email),
+      name,
+      password,
+      role,
+    })
     const { access_token, user: userData } = res.data
     localStorage.setItem('sf_token', access_token)
     localStorage.setItem('sf_user', JSON.stringify(userData))

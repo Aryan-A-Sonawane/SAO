@@ -65,6 +65,20 @@
 
 html { scroll-behavior: smooth; }
 
+/* ─── Capacitor native safe-area insets ─────────────────────────────────────
+   On iPhones with notches and Android phones with gesture nav bars, the
+   viewport extends behind the status bar / home indicator. iOS exposes
+   env(safe-area-inset-*) automatically; Capacitor exposes it on Android too
+   when viewport-fit=cover is set on the <meta name="viewport"> tag.
+   Apply padding to the body so authenticated pages don't render under
+   the status bar. */
+body {
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
 body {
   font-family: var(--font-body);
   background: var(--grad-bg);

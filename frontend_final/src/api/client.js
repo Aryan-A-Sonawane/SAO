@@ -1,7 +1,18 @@
 import axios from 'axios'
+import { Capacitor } from '@capacitor/core'
+
+// On web (dev or Caddy-served prod), `/api` resolves through a proxy → backend.
+// In a native Capacitor WebView the app is served from `capacitor://localhost`
+// (Android) or `capacitor://localhost` (iOS), so `/api` resolves to the
+// non-existent native shell. Mobile builds MUST point at an absolute URL.
+//
+// Set VITE_API_URL in `frontend_final/.env.production` (or via build env)
+// before running `npm run build:mobile`.
+const NATIVE_API_URL = import.meta.env.VITE_API_URL || 'https://api.interviewvault.example/api'
+const baseURL = Capacitor.isNativePlatform() ? NATIVE_API_URL : '/api'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL,
   timeout: 180000,  // 3 min — submission makes 3 sequential Gemini calls
 })
 
@@ -145,6 +156,68 @@ export const interviewSessionsApi = {
   get: (id) => api.get(`/interviews/sessions/${id}`).then((r) => r.data),
   create: (payload) => api.post('/interviews/sessions', payload).then((r) => r.data),
   remove: (id) => api.delete(`/interviews/sessions/${id}`).then((r) => r.data),
+}
+
+// ─── Phase 3 + 4: server-side adaptive interview engine ────────────────────
+// Server holds the state machine; frontend just sends answers and renders
+// whatever the engine returns. Polling /progress is cheap (no LLM call).
+export const adaptiveInterviewApi = {
+  start: ({ mode = 'studied_topics', target_duration_minutes = 30, job_role, company, topics_override } = {}) =>
+    api
+      .post('/interviews/adaptive/start', {
+        mode,
+        target_duration_minutes,
+        job_role,
+        company,
+        topics_override,
+      })
+      .then((r) => r.data),
+
+  answer: (sessionId, answer) =>
+    api
+      .post(`/interviews/adaptive/${sessionId}/answer`, { answer })
+      .then((r) => r.data),
+
+  progress: (sessionId) =>
+    api.get(`/interviews/adaptive/${sessionId}/progress`).then((r) => r.data),
+
+  end: (sessionId) =>
+    api.post(`/interviews/adaptive/${sessionId}/end`).then((r) => r.data),
+
+  // Phase 4: diagram/whiteboard capture. `imageBlob` is a Blob/File of a PNG;
+  // `explanation` is an optional typed note that travels alongside the image.
+  captureWork: (sessionId, imageBlob, explanation = '') => {
+    const fd = new FormData()
+    fd.append('image', imageBlob, 'capture.png')
+    fd.append('explanation', explanation || '')
+    return api
+      .post(`/interviews/adaptive/${sessionId}/capture-work`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        // Vision call can take 8-15s with Gemini Vision; allow extra room.
+        timeout: 60000,
+      })
+      .then((r) => r.data)
+  },
+}
+
+// ─── Phase 2: resume management from the profile page ─────────────────────
+// (Onboarding has its own /onboarding/analyze-resume endpoint — these are
+// for post-onboarding re-uploads + viewing the structured summary.)
+export const resumeApi = {
+  summary: () => api.get('/users/resume-summary').then((r) => r.data),
+
+  replace: (file) => {
+    const fd = new FormData()
+    fd.append('resume', file)
+    return api
+      .post('/users/resume-replace', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,  // pdfplumber + 2 Gemini calls
+      })
+      .then((r) => r.data)
+  },
+
+  remove: () => api.delete('/users/resume').then((r) => r.data),
 }
 
 export const skillProfileApi = {

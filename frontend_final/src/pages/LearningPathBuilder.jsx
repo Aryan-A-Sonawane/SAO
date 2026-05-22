@@ -23,10 +23,10 @@ import {
   ChevronLeft,
   Circle,
   GripVertical,
-  Home,
   Loader2,
   Save,
-  Sparkles,
+  Wand2,
+  Layers,
 } from 'lucide-react'
 
 import DarkLayout from '@/components/layout/DarkLayout'
@@ -238,88 +238,113 @@ export default function LearningPathBuilder() {
 
   return (
     <DarkLayout>
-      <div className="mx-auto w-full max-w-6xl">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
+      {/* Spacious content column — wider cap on large screens plus very
+          generous outer gutters so the two lists are never crowding the
+          edges of the main pane. */}
+      <div className="mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 md:px-16 lg:px-20 xl:px-24">
+        {/* ─── Compact hero ───────────────────────────────────────────── */}
+        <motion.header
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="dk-glass-card"
-          style={{
-            padding: '28px 32px', marginBottom: 28,
-            display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end',
-            justifyContent: 'space-between', gap: 24,
-            background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, var(--dk-surface) 60%)',
-          }}
+          className="mb-12 flex flex-wrap items-center justify-between gap-x-10 gap-y-5"
         >
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <div
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                fontSize: '0.7rem', color: 'var(--dk-text-muted)',
-                textTransform: 'uppercase', letterSpacing: '0.32em', marginBottom: 12,
-                fontWeight: 600,
-              }}
-            >
-              <Sparkles className="h-3 w-3" /> Configure your path
+          {/* Title block */}
+          <div className="min-w-[260px] flex-1">
+            <div className="text-[10px] font-medium uppercase tracking-[0.32em] text-muted-foreground/80">
+              Configure your path
             </div>
-            <h1
-              style={{
-                fontSize: 'clamp(1.6rem, 3vw, 2.1rem)', fontWeight: 800,
-                color: 'var(--dk-text)', letterSpacing: '-0.04em', margin: 0,
-              }}
-            >
-              <span style={{ marginRight: 12 }}>{role_icon}</span>
-              {role_title}
+            <h1 className="mt-3 flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground">
+              <span className="text-2xl" aria-hidden>
+                {role_icon}
+              </span>
+              <span>{role_title}</span>
             </h1>
-            <p
-              style={{
-                marginTop: 10, maxWidth: 620,
-                color: 'var(--dk-text-muted)', fontSize: '0.88rem', lineHeight: 1.6,
-              }}
-            >
-              Drag topics between <span style={{ color: '#6ee7b7', fontWeight: 600 }}>Green</span> (committed) and
-              <span style={{ color: '#fcd34d', fontWeight: 600, marginLeft: 4 }}>Yellow</span> (optional). Reorder
-              by priority — the first Green topic is what you&apos;ll see in &quot;Continue Learning&quot;.
-            </p>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <Button variant="ghost" onClick={handleBackToDashboard} disabled={completing}>
-              <ChevronLeft className="h-4 w-4" /> Back to dashboard
+
+          {/* Action toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBackToDashboard}
+              disabled={completing}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" /> Back
             </Button>
-            <Button variant="outline" onClick={() => navigate('/plan')}>
-              Personalize
+            <Button variant="outline" size="sm" onClick={() => navigate('/plan')}>
+              <Wand2 className="h-4 w-4" /> Personalize
             </Button>
-            <Button onClick={handleSave} disabled={!dirty || configure.isPending}>
+            <Button variant="outline" size="sm" onClick={() => navigate('/tracks')}>
+              <Layers className="h-4 w-4" /> View Learning Track
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSave}
+              disabled={!dirty || configure.isPending}
+              className={cn(dirty && 'border-primary/60 text-primary hover:bg-primary/10')}
+            >
               {configure.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              Save
+              {dirty ? 'Save' : 'Saved'}
             </Button>
-            <Button variant="gradient" onClick={handleStartLearning} disabled={completing}>
-              {completing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+            <Button
+              variant="gradient"
+              size="sm"
+              onClick={handleStartLearning}
+              disabled={completing}
+            >
+              {completing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowRight className="h-4 w-4" />
+              )}
               Start learning
             </Button>
           </div>
-        </motion.div>
+        </motion.header>
 
+        {/* Helper line — moved out of the hero card to keep the header lean. */}
+        <p className="mb-10 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Drag topics between{' '}
+          <span className="font-medium text-emerald-300">Green</span> (committed) and{' '}
+          <span className="font-medium text-amber-300">Yellow</span> (optional). The first Green
+          topic is what you&apos;ll see in &quot;Continue Learning&quot;.
+        </p>
+
+        {/* ─── Stats strip — single inline row, no card boxes ─────────── */}
         {stats && (
-          <Card className="mb-6">
-            <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Path completion
-                </div>
-                <div className="text-lg font-semibold text-foreground">
-                  {stats.completed}/{stats.total_green} topics done
-                </div>
-              </div>
-              <div className="w-full max-w-md">
-                <Progress value={stats.completion_pct} />
-              </div>
-              <div className="text-sm text-muted-foreground">{stats.completion_pct}% mastered</div>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.04 }}
+            className="mb-12 flex flex-wrap items-center gap-x-12 gap-y-5 rounded-2xl border border-border/30 bg-card/20 px-8 py-6 backdrop-blur-sm"
+          >
+            <StatInline
+              label="Completion"
+              value={`${stats.completed} / ${stats.total_green}`}
+              hint={`${stats.completion_pct}% mastered`}
+              progress={stats.completion_pct}
+            />
+            <span className="hidden h-8 w-px bg-border/40 sm:block" />
+            <StatInline
+              label="Committed"
+              value={green.length}
+              hint="core topics"
+              dot="emerald"
+            />
+            <span className="hidden h-8 w-px bg-border/40 sm:block" />
+            <StatInline
+              label="Optional"
+              value={yellow.length}
+              hint="stretch topics"
+              dot="amber"
+            />
+          </motion.div>
         )}
 
         <DndContext
@@ -330,18 +355,20 @@ export default function LearningPathBuilder() {
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveId(null)}
         >
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-8 md:grid-cols-2 md:gap-10 lg:gap-12">
             <TopicColumn
               id="green"
               tone="green"
-              title="Green list — committed"
+              title="Green list"
+              eyebrow="Committed"
               subtitle="The syllabus we will guide you through."
               topics={green}
             />
             <TopicColumn
               id="yellow"
               tone="yellow"
-              title="Yellow list — optional"
+              title="Yellow list"
+              eyebrow="Optional"
               subtitle="Extended topics to study after the core path."
               topics={yellow}
             />
@@ -361,45 +388,116 @@ export default function LearningPathBuilder() {
   )
 }
 
-/* ─── Column ──────────────────────────────────────────────────────────── */
-function TopicColumn({ id, tone, title, subtitle, topics }) {
-  const accent = tone === 'green' ? 'emerald' : 'amber'
+/* ─── Inline stat (used in the single-row stats strip) ────────────────── */
+/* Borderless, no card. Each stat is just a small label + a big number +
+   an optional thin progress bar. Visually much lighter than the previous
+   3-card grid — the row reads as a single ribbon of metadata. */
+function StatInline({ label, value, hint, dot, progress }) {
   return (
-    <Card
+    <div className="flex min-w-[140px] flex-col">
+      <div className="flex items-center gap-1.5">
+        {dot && (
+          <span
+            aria-hidden
+            className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              dot === 'emerald' ? 'bg-emerald-400' : 'bg-amber-400',
+            )}
+          />
+        )}
+        <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+          {label}
+        </div>
+      </div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <div className="text-xl font-semibold tabular-nums text-foreground">{value}</div>
+        {hint && <div className="text-[11px] text-muted-foreground">{hint}</div>}
+      </div>
+      {progress != null && (
+        <Progress value={progress} className="mt-1.5 h-0.5 w-32" />
+      )}
+    </div>
+  )
+}
+
+/* ─── Column ──────────────────────────────────────────────────────────── */
+/* Each column has a clear identity: green list = green-tinted backdrop,
+   yellow list = amber-tinted backdrop. Items inside take the column's tone
+   automatically so the user can tell at a glance which lane they're in. */
+function TopicColumn({ id, tone, title, eyebrow, subtitle, topics }) {
+  const isGreen = tone === 'green'
+  return (
+    <motion.div
+      layout
       className={cn(
-        'flex flex-col overflow-hidden border-l-4',
-        tone === 'green' ? 'border-l-emerald-500/70' : 'border-l-amber-500/70',
+        'flex flex-col rounded-2xl border p-6 transition-colors sm:p-7 md:p-8',
+        isGreen
+          ? 'border-emerald-500/20 bg-emerald-500/[0.025]'
+          : 'border-amber-500/20 bg-amber-500/[0.025]',
       )}
     >
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold">{title}</CardTitle>
-          <Badge variant={tone === 'green' ? 'success' : 'warning'}>{topics.length}</Badge>
+      {/* Header */}
+      <div className="mb-7 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className={cn(
+                'h-2 w-2 rounded-full',
+                isGreen ? 'bg-emerald-400 shadow-[0_0_10px_rgba(74,222,128,0.6)]' : 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]',
+              )}
+            />
+            <span
+              className={cn(
+                'text-[10px] font-semibold uppercase tracking-[0.22em]',
+                isGreen ? 'text-emerald-300' : 'text-amber-300',
+              )}
+            >
+              {eyebrow}
+            </span>
+          </div>
+          <h3 className="mt-1.5 text-base font-semibold text-foreground">{title}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         </div>
-        <CardDescription>{subtitle}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-2">
+        <div
+          className={cn(
+            'shrink-0 rounded-full border px-3 py-1 text-xs font-medium tabular-nums',
+            isGreen
+              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+              : 'border-amber-500/25 bg-amber-500/10 text-amber-300',
+          )}
+        >
+          {topics.length}
+        </div>
+      </div>
+
+      {/* Topic list */}
+      <div className="flex flex-1 flex-col gap-3">
         <SortableContext id={id} items={topics.map((t) => t.topic)} strategy={verticalListSortingStrategy}>
           <AnimatePresence initial={false}>
             {topics.length === 0 && (
-              <div
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 className={cn(
-                  'rounded-lg border border-dashed py-10 text-center text-xs',
-                  tone === 'green'
+                  'flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-center',
+                  isGreen
                     ? 'border-emerald-500/30 text-emerald-200/70'
                     : 'border-amber-500/30 text-amber-200/70',
                 )}
               >
-                Drag topics here
-              </div>
+                <GripVertical className="h-5 w-5 opacity-50" />
+                <div className="text-xs font-medium">Drag topics here</div>
+              </motion.div>
             )}
             {topics.map((t) => (
               <SortableTopic key={t.topic} topic={t} tone={tone} />
             ))}
           </AnimatePresence>
         </SortableContext>
-      </CardContent>
-    </Card>
+      </div>
+    </motion.div>
   )
 }
 
@@ -422,22 +520,31 @@ function SortableTopic({ topic, tone }) {
 function TopicCard({ topic, tone, attributes, listeners, dragging }) {
   const status = topic.status || 'not_started'
   const StatusIcon = status === 'completed' ? CheckCircle2 : Circle
+  const isGreen = tone === 'green'
+  // The "New" badge on every row is visual noise — only show status when
+  // the topic is actually in progress or completed.
+  const showStatusBadge = status !== 'not_started'
   return (
     <motion.div
       layout
       whileHover={{ x: 2 }}
       className={cn(
-        'group flex items-center gap-3 rounded-lg border bg-card/60 p-3 backdrop-blur-md transition-shadow',
-        tone === 'green'
-          ? 'border-emerald-500/30 shadow-[inset_3px_0_0_0_#10b981]'
-          : 'border-amber-500/30 shadow-[inset_3px_0_0_0_#f59e0b]',
-        dragging && 'shadow-2xl',
+        'flex items-center gap-3.5 rounded-xl border px-4 py-3.5 backdrop-blur-md transition-colors',
+        isGreen
+          ? 'border-emerald-500/30 bg-emerald-500/[0.07] hover:border-emerald-500/55 hover:bg-emerald-500/[0.12]'
+          : 'border-amber-500/30 bg-amber-500/[0.07] hover:border-amber-500/55 hover:bg-amber-500/[0.12]',
+        dragging && 'shadow-2xl ring-1 ring-white/10',
       )}
     >
       <button
         {...attributes}
         {...listeners}
-        className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+        className={cn(
+          'cursor-grab transition-colors active:cursor-grabbing',
+          isGreen
+            ? 'text-emerald-400/50 hover:text-emerald-300'
+            : 'text-amber-400/50 hover:text-amber-300',
+        )}
         aria-label="Drag handle"
       >
         <GripVertical className="h-4 w-4" />
@@ -445,11 +552,22 @@ function TopicCard({ topic, tone, attributes, listeners, dragging }) {
       <StatusIcon
         className={cn(
           'h-4 w-4 shrink-0',
-          status === 'completed' ? 'text-emerald-400' : 'text-muted-foreground/60',
+          status === 'completed'
+            ? 'text-emerald-400'
+            : isGreen
+              ? 'text-emerald-400/50'
+              : 'text-amber-400/50',
         )}
       />
       <div className="flex-1 truncate text-sm font-medium text-foreground">{topic.topic}</div>
-      <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>
+      {showStatusBadge && (
+        <Badge
+          variant={STATUS_VARIANT[status]}
+          className="shrink-0 text-[10px] uppercase tracking-wider"
+        >
+          {STATUS_LABEL[status]}
+        </Badge>
+      )}
     </motion.div>
   )
 }

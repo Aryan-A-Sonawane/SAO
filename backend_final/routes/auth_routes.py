@@ -9,10 +9,23 @@ from database import get_db
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
+def _normalize_email(email: str) -> str:
+    """Canonicalize email for storage + lookup.
+
+    Pydantic's EmailStr lowercases the *domain* but preserves the local-part
+    case, so `John@Gmail.com` and `john@gmail.com` are stored as different
+    rows and a user who registers with one casing cannot sign in with the
+    other. We treat emails as case-insensitive everywhere.
+    """
+    return (email or "").strip().lower()
+
+
 @router.post("/register", response_model=schemas.TokenResponse)
 def register(user_data: schemas.UserRegister, db: Session = Depends(get_db)):
-    # Check if email already exists
-    existing = db.query(models.User).filter(models.User.email == user_data.email).first()
+    email = _normalize_email(user_data.email)
+
+    # Check if email already exists (case-insensitive)
+    existing = db.query(models.User).filter(models.User.email == email).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -29,7 +42,7 @@ def register(user_data: schemas.UserRegister, db: Session = Depends(get_db)):
     import random
     colors = ["#6366f1", "#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b"]
     user = models.User(
-        email=user_data.email,
+        email=email,
         name=user_data.name.strip(),
         hashed_password=get_password_hash(user_data.password),
         role=user_data.role,
@@ -48,7 +61,16 @@ def register(user_data: schemas.UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=schemas.TokenResponse)
 def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == credentials.email).first()
+    email = _normalize_email(credentials.email)
+
+    # Case-insensitive lookup: matches accounts that were created before email
+    # normalization was added (those may be stored with mixed case).
+    from sqlalchemy import func
+    user = (
+        db.query(models.User)
+        .filter(func.lower(models.User.email) == email)
+        .first()
+    )
 
     if not user:
         raise HTTPException(

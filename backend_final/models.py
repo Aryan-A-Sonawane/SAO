@@ -28,11 +28,26 @@ class User(Base):
     onboarding_complete = Column(Boolean, default=False)
     target_role = Column(String(100), default="")
     resume_text = Column(Text, default="")
+    # Structured entities extracted from resume_text via Gemini. Used by the
+    # interview engine to ground 1-2 questions per session in the user's
+    # actual experience (projects, companies, tech stack). Shape:
+    # {projects:[...], skills:[...], experience:[...], years_experience:float,
+    #  domains:[...], education:[...], current_role:str, seniority:str,
+    #  highlights:[...], extracted_at:iso_string}
+    resume_entities = Column(JSON, default=dict)
+    resume_uploaded_at = Column(DateTime, nullable=True)
 
     pdfs = relationship("PDF", back_populates="uploader")
     submissions = relationship("Submission", back_populates="user")
     badges = relationship("UserBadge", back_populates="user", lazy="dynamic")
     xp_logs = relationship("XPLog", back_populates="user", lazy="dynamic")
+
+    @property
+    def has_resume(self) -> bool:
+        """True iff the user has uploaded resume text. Computed property so
+        schemas.UserResponse (with from_attributes=True) can include it
+        without us shipping the full resume_text in every /me response."""
+        return bool((self.resume_text or "").strip())
 
 
 class PDF(Base):
@@ -270,7 +285,15 @@ class CompanyInsight(Base):
 
 
 class InterviewSession(Base):
-    """Full interview session — transcript, report, behavioral stats."""
+    """Full interview session — transcript, report, behavioral stats.
+
+    Used by BOTH flows:
+      - Legacy stateless flow: frontend manages history; POSTs the full
+        transcript + end_evaluation to /api/interviews/sessions on completion.
+      - Adaptive flow (Phase 3): server-side state machine drives the entire
+        interview turn-by-turn. `status` + `state` columns hold the live
+        machine state until the session ends.
+    """
     __tablename__ = "interview_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -286,5 +309,16 @@ class InterviewSession(Base):
     overall_score = Column(Float, nullable=True)
     verdict = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # ─── Phase 3 (adaptive engine) ──────────────────────────────────────────
+    # Lifecycle marker. Legacy sessions are created at "completed" in one shot;
+    # adaptive sessions go in_progress → completed (or → abandoned on timeout).
+    status = Column(String(20), default="completed")
+    # Live state machine snapshot. Shape documented in
+    # services/adaptive_interview_engine.py — includes topic queue, current
+    # topic/difficulty, per-topic scores, probe counter, etc.
+    state = Column(JSON, default=dict)
+    target_duration_minutes = Column(Integer, default=30)
+    ended_at = Column(DateTime, nullable=True)
 
     user = relationship("User", foreign_keys=[user_id])

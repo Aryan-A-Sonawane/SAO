@@ -207,6 +207,7 @@ def analyze_company(
     if existing:
         return {
             "status": "cached",
+            "company_slug": slug,
             "company_name": existing.company_name,
             "topics": existing.topics,
             "patterns": existing.patterns,
@@ -254,6 +255,7 @@ Return JSON: {{"topics": [...], "topic_weights": {{}}, "patterns": [...], "analy
 
     return {
         "status": "analyzed",
+        "company_slug": insight.company_slug,
         "company_name": insight.company_name,
         "topics": insight.topics,
         "patterns": insight.patterns,

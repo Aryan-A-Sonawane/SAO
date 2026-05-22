@@ -19,11 +19,30 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./interviewvault.db"
 
-    # Gemini AI
+    # ─── Gemini AI ──────────────────────────────────────────────────────────
+    # Primary key (kept on the original name for backward-compat — every
+    # existing call site reads settings.GEMINI_API_KEY).
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    # Secondary key used by the LLM router for round-robin / rate-limit
+    # fallback. Empty string disables the second key (router degrades to
+    # single-key mode automatically).
+    GEMINI_API_KEY_2: str = os.getenv("GEMINI_API_KEY_2", "")
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    # Per-key cooldown when we see a 429/quota error (seconds). Gemini's
+    # free-tier window is 60s, so this matches.
+    GEMINI_RATE_LIMIT_COOLDOWN_S: int = 60
 
-    # Perplexity AI (for company intelligence / real-time search)
+    # ─── Anthropic (Claude) ─────────────────────────────────────────────────
+    # When empty, the router transparently falls back to Gemini for any task
+    # routed to Claude. No code change needed when the key is added.
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    # Current model strings as of 2026. The router uses the alias form
+    # (without dated suffix) so it auto-tracks Anthropic's "latest" pointer.
+    CLAUDE_OPUS_MODEL: str = os.getenv("CLAUDE_OPUS_MODEL", "claude-opus-4-6")
+    CLAUDE_SONNET_MODEL: str = os.getenv("CLAUDE_SONNET_MODEL", "claude-sonnet-4-6")
+    CLAUDE_HAIKU_MODEL: str = os.getenv("CLAUDE_HAIKU_MODEL", "claude-haiku-4-5-20251001")
+
+    # ─── Perplexity (real-time search) ──────────────────────────────────────
     PERPLEXITY_API_KEY: str = os.getenv("PERPLEXITY_API_KEY", "")
     PERPLEXITY_MODEL: str = "sonar"
 

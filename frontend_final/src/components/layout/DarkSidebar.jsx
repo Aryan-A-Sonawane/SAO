@@ -159,12 +159,10 @@ export default function DarkSidebar() {
                         <NavItem to="/onboarding/path" icon="🧩" label="Path Builder" />
                         <NavItem to="/learn" icon="📚" label="Learning Hub" />
                         <NavItem to="/plan" icon="🏢" label="Company Plan" />
-                        <NavItem to="/interview" icon="🎙️" label="Interview Coach" />
+                        <NavItem to="/interview" icon="🎙️" label="Mock Interview" />
                         <NavItem to="/interviews" icon="🗂️" label="Interview History" />
-                        <NavItem to="/tracks" icon="🛤️" label="Learning Tracks" />
                         <NavItem to="/remediation" icon="🩹" label="Remediation" />
                         <NavItem to="/demo/coding" icon="💻" label="Demo Challenge" />
-                        <NavItem to="/portfolio" icon="🎓" label={t('portfolio')} />
                         <NavItem to="/profile" icon="👤" label="Profile" />
                     </>
                 )}

@@ -18,7 +18,7 @@ import AssessmentResult from './pages/AssessmentResult'
 import Profile from './pages/Profile'
 import CodingSkills from './pages/CodingSkills'
 import DemoCodingChallenge from './pages/DemoCodingChallenge'
-import InterviewCoach from './pages/InterviewCoach'
+import InterviewAdaptive from './pages/InterviewAdaptive'
 import Tracks from './pages/Tracks'
 import RemediationHub from './pages/RemediationHub'
 import Onboarding from './pages/Onboarding'
@@ -172,12 +172,20 @@ function AppRoutes() {
         }
       />
 
-      {/* AI Interview Coach */}
+      {/* Adaptive Mock Interview — server-side state machine */}
       <Route
         path="/interview"
         element={
           <ProtectedRoute>
-            <InterviewCoach />
+            <InterviewAdaptive />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/interview/live/:sessionId"
+        element={
+          <ProtectedRoute>
+            <InterviewAdaptive />
           </ProtectedRoute>
         }
       />
@@ -276,10 +284,6 @@ function AppRoutes() {
       <Route
         path="/result/:submissionId"
         element={<ProtectedRoute><AssessmentResult /></ProtectedRoute>}
-      />
-      <Route
-        path="/portfolio"
-        element={<ProtectedRoute studentOnly><Portfolio /></ProtectedRoute>}
       />
       <Route
         path="/profile"

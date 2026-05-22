@@ -329,6 +329,87 @@
     background: linear-gradient(to right, var(--dk-border), transparent);
 }
 
+/* ─── Section eyebrows (small uppercase label above a group) ──────────── */
+.dk-section-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--dk-text-muted);
+    margin-bottom: 12px;
+}
+.dk-section-eyebrow::before {
+    content: '';
+    width: 14px;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.6;
+}
+.dk-section-eyebrow--indigo { color: var(--dk-primary-light); }
+.dk-section-eyebrow--violet { color: #c084fc; }
+.dk-section-eyebrow--cyan   { color: var(--dk-cyan); }
+.dk-section-eyebrow--amber  { color: var(--dk-amber); }
+.dk-section-eyebrow--green  { color: var(--dk-green); }
+
+/* ─── Stat-card colored top accents (per metric) ─────────────────────── */
+.dk-stat-card--indigo { box-shadow: inset 0 2px 0 0 rgba(99,102,241,0.55), 0 4px 24px rgba(0,0,0,0.3); }
+.dk-stat-card--amber  { box-shadow: inset 0 2px 0 0 rgba(251,191,36,0.55), 0 4px 24px rgba(0,0,0,0.3); }
+.dk-stat-card--green  { box-shadow: inset 0 2px 0 0 rgba(74,222,128,0.55), 0 4px 24px rgba(0,0,0,0.3); }
+.dk-stat-card--violet { box-shadow: inset 0 2px 0 0 rgba(168,85,247,0.55), 0 4px 24px rgba(0,0,0,0.3); }
+.dk-stat-card--cyan   { box-shadow: inset 0 2px 0 0 rgba(34,211,238,0.55), 0 4px 24px rgba(0,0,0,0.3); }
+
+/* ─── Card surface variants (so different section types feel distinct) ── */
+.dk-card--action {
+    background: linear-gradient(135deg, rgba(99,102,241,0.07) 0%, var(--dk-surface) 65%);
+    border-color: rgba(99,102,241,0.20);
+}
+.dk-card--action:hover {
+    border-color: rgba(99,102,241,0.40);
+    box-shadow: 0 12px 48px rgba(99,102,241,0.18);
+}
+.dk-card--gamification {
+    background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, var(--dk-surface) 65%);
+    border-color: rgba(168,85,247,0.18);
+}
+.dk-card--gamification:hover {
+    border-color: rgba(168,85,247,0.35);
+    box-shadow: 0 12px 48px rgba(168,85,247,0.15);
+}
+.dk-card--insight {
+    background: linear-gradient(135deg, rgba(34,211,238,0.05) 0%, var(--dk-surface) 65%);
+    border-color: rgba(34,211,238,0.15);
+}
+.dk-card--insight:hover {
+    border-color: rgba(34,211,238,0.30);
+    box-shadow: 0 12px 48px rgba(34,211,238,0.12);
+}
+.dk-card--featured {
+    background:
+        radial-gradient(800px circle at 0% 0%, rgba(99,102,241,0.10), transparent 45%),
+        linear-gradient(135deg, rgba(168,85,247,0.08) 0%, var(--dk-surface) 70%);
+    border-color: rgba(168,85,247,0.22);
+}
+.dk-card--featured:hover {
+    border-color: rgba(168,85,247,0.40);
+    box-shadow: 0 16px 56px rgba(168,85,247,0.18);
+}
+
+/* ─── Section group wrapper — subtle tinted backdrop behind a region ──── */
+.dk-section-group {
+    border-radius: 24px;
+    padding: 22px;
+    margin-bottom: 28px;
+    border: 1px solid var(--dk-border);
+}
+.dk-section-group--stats       { background: rgba(99,102,241,0.025); }
+.dk-section-group--insights    { background: rgba(34,211,238,0.022); border-color: rgba(34,211,238,0.10); }
+.dk-section-group--performance { background: rgba(255,255,255,0.015); }
+.dk-section-group--gamification{ background: rgba(168,85,247,0.030); border-color: rgba(168,85,247,0.12); }
+.dk-section-group--action      { background: rgba(99,102,241,0.030); border-color: rgba(99,102,241,0.12); }
+
 /* ─── Badge overrides ───────────────────────────────────────────────────── */
 .dark-app .badge-primary {
     background: rgba(99, 102, 241, 0.15);

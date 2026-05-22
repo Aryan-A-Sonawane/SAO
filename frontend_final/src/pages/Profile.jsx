@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import toast from 'react-hot-toast'
 import { useLang } from '../context/LangContext'
 import { useAuth } from '../context/AuthContext'
 import DarkLayout from '../components/layout/DarkLayout'
-import api from '../api/client'
+import api, { resumeApi } from '../api/client'
 import '../styles/page-animations.css'
 
 /**
@@ -23,6 +24,218 @@ function SpotlightCard({ children, style = {}, className = '' }) {
   return (
     <div ref={ref} className={`dk-spotlight-card ${className}`} onMouseMove={onMove} style={style}>
       {children}
+    </div>
+  )
+}
+
+/**
+ * ResumeCard — surfaces what's stored under user.resume_entities + lets the
+ * user replace or remove it. The interview engine grounds 1-2 questions per
+ * session in this data, so it's worth making visible + editable.
+ *
+ * Three states:
+ *   - no resume on file → upload CTA
+ *   - resume on file, no parsed entities (extraction failed) → upload CTA + error
+ *   - resume + entities → summary card with replace/remove
+ */
+function ResumeCard() {
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const fileRef = useRef(null)
+
+  const reload = async () => {
+    setLoading(true)
+    try {
+      const data = await resumeApi.summary()
+      setSummary(data)
+    } catch (err) {
+      // 404 / network — treat as no-resume
+      setSummary({ has_resume: false })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { reload() }, [])
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Only PDF resumes are supported.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Resume too large (max 10 MB).')
+      return
+    }
+    setUploading(true)
+    try {
+      const result = await resumeApi.replace(file)
+      setSummary(result.summary)
+      toast.success(result.message || 'Resume updated.')
+    } catch (err) {
+      const detail = err.response?.data?.detail || 'Could not process the resume.'
+      toast.error(detail)
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const handleRemove = async () => {
+    if (!confirm('Remove your resume? Future interviews will fall back to generic questions.')) return
+    setRemoving(true)
+    try {
+      await resumeApi.remove()
+      toast.success('Resume removed.')
+      await reload()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not remove resume.')
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <SpotlightCard style={{ marginBottom: 20 }}>
+        <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 8 }}>
+          📄 Resume
+        </h4>
+        <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.85rem' }}>Loading…</p>
+      </SpotlightCard>
+    )
+  }
+
+  const hasResume = !!summary?.has_resume
+  const entities = summary?.has_structured_data ? summary : null
+  const uploadedAt = summary?.uploaded_at
+    ? new Date(summary.uploaded_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : null
+
+  return (
+    <SpotlightCard style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div>
+          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--dk-text)', margin: 0 }}>
+            📄 Resume
+          </h4>
+          <p style={{ fontSize: '0.78rem', color: 'var(--dk-text-muted)', margin: '4px 0 0' }}>
+            {hasResume
+              ? 'Used to ground interview questions in your real experience.'
+              : 'Upload a PDF to get experience-grounded interview questions.'}
+            {uploadedAt && (
+              <span style={{ marginLeft: 8, color: '#64748b' }}>· Updated {uploadedAt}</span>
+            )}
+          </p>
+        </div>
+        <input
+          ref={fileRef} type="file" accept="application/pdf"
+          style={{ display: 'none' }} onChange={handleFile}
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading || removing}
+            className="dk-btn-glow"
+            style={{ fontSize: '0.82rem', padding: '8px 14px' }}
+          >
+            {uploading ? '⏳ Processing…' : hasResume ? 'Replace' : 'Upload resume'}
+          </button>
+          {hasResume && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={uploading || removing}
+              className="dk-btn dk-btn-ghost"
+              style={{ fontSize: '0.82rem', padding: '8px 14px', color: '#fca5a5' }}
+            >
+              {removing ? '…' : 'Remove'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {summary?.extraction_error && (
+        <div style={{
+          padding: 10, borderRadius: 8, marginBottom: 10,
+          background: 'rgba(245,158,11,0.08)',
+          border: '1px solid rgba(245,158,11,0.2)',
+          fontSize: '0.78rem', color: '#fbbf24',
+        }}>
+          ⚠️ Stored, but structured extraction failed: {summary.extraction_error}. Try a text-based PDF (not a scan).
+        </div>
+      )}
+
+      {entities && (
+        <div style={{
+          display: 'grid', gap: 10,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          marginBottom: 14,
+        }}>
+          <ResumeStat label="Current role" value={entities.current_role || '—'} />
+          <ResumeStat label="Seniority" value={entities.seniority || '—'} />
+          <ResumeStat label="Experience" value={entities.years_experience != null ? `${entities.years_experience} yr` : '—'} />
+          <ResumeStat label="Skills" value={entities.skills_count ?? 0} />
+          <ResumeStat label="Projects" value={entities.projects_count ?? 0} />
+          <ResumeStat label="Roles" value={entities.experience_count ?? 0} />
+        </div>
+      )}
+
+      {entities?.skills?.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
+            Top skills
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {entities.skills.slice(0, 12).map((s) => (
+              <span key={s} style={{
+                padding: '4px 10px', borderRadius: 999, fontSize: '0.75rem',
+                background: 'rgba(99,102,241,0.1)',
+                border: '1px solid rgba(99,102,241,0.2)',
+                color: '#a5b4fc',
+              }}>{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {entities?.projects?.length > 0 && (
+        <div>
+          <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
+            Projects
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, color: '#cbd5e1', fontSize: '0.82rem', lineHeight: 1.7 }}>
+            {entities.projects.slice(0, 4).map((p, i) => (
+              <li key={i}>
+                <strong style={{ color: '#f1f5f9' }}>{p.name || 'Untitled'}</strong>
+                {p.description ? ` — ${p.description}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </SpotlightCard>
+  )
+}
+
+function ResumeStat({ label, value }) {
+  return (
+    <div style={{
+      padding: 10, borderRadius: 10,
+      background: 'rgba(255,255,255,0.025)',
+      border: '1px solid rgba(255,255,255,0.05)',
+    }}>
+      <div style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: '0.92rem', color: 'var(--dk-text)', marginTop: 4, fontWeight: 600, textTransform: label === 'Seniority' ? 'capitalize' : 'none' }}>
+        {value}
+      </div>
     </div>
   )
 }
@@ -95,6 +308,9 @@ export default function Profile() {
             </div>
           </div>
         </SpotlightCard>
+
+        {/* Resume — grounds interview question generation */}
+        <ResumeCard />
 
         <form onSubmit={handleSave}>
           {/* Personal info */}

@@ -6,7 +6,7 @@ import {
   Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
 } from 'chart.js'
 import { Radar, Bar } from 'react-chartjs-2'
-import { Command as CommandIcon, BookOpen, Activity } from 'lucide-react'
+import { Command as CommandIcon, BookOpen, Activity, Layers } from 'lucide-react'
 import DarkLayout from '../components/layout/DarkLayout'
 import JoinClassModal from '../components/dashboard/JoinClassModal'
 import ClassroomCard from '../components/dashboard/ClassroomCard'
@@ -24,9 +24,12 @@ import {
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
 /* ─── Glassmorphic Stat Card ─────────────────────────────────────────────── */
+/* The iconClass (indigo / amber / green / violet / cyan) is reused as a
+   colored top accent on the card itself so each stat has its own identity
+   rather than every card looking identical. */
 function StatCard({ icon, iconClass, value, label, sub }) {
   return (
-    <div className="dk-stat-card">
+    <div className={`dk-stat-card dk-stat-card--${iconClass}`}>
       <div className={`dk-stat-icon ${iconClass}`}>{icon}</div>
       <div className="dk-stat-info">
         <h3>{value}</h3>
@@ -216,22 +219,37 @@ export default function StudentDashboard() {
             Track your roadmap, jump back into a topic, and review past mock interviews.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            const ev = new KeyboardEvent('keydown', { key: 'k', metaKey: true, ctrlKey: true, bubbles: true })
-            document.dispatchEvent(ev)
-          }}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
-            background: 'rgba(99,102,241,0.08)',
-            border: '1px solid rgba(99,102,241,0.25)',
-            color: 'var(--dk-text)', fontSize: '0.78rem', fontWeight: 500,
-          }}
-        >
-          <CommandIcon size={14} /> Search · <kbd style={{ fontFamily: 'inherit', padding: '1px 6px', borderRadius: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.7rem' }}>Ctrl K</kbd>
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/tracks')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+              background: 'rgba(16,185,129,0.08)',
+              border: '1px solid rgba(16,185,129,0.25)',
+              color: '#34d399', fontSize: '0.78rem', fontWeight: 600,
+            }}
+          >
+            <Layers size={14} /> View Learning Track
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const ev = new KeyboardEvent('keydown', { key: 'k', metaKey: true, ctrlKey: true, bubbles: true })
+              document.dispatchEvent(ev)
+            }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+              background: 'rgba(99,102,241,0.08)',
+              border: '1px solid rgba(99,102,241,0.25)',
+              color: 'var(--dk-text)', fontSize: '0.78rem', fontWeight: 500,
+            }}
+          >
+            <CommandIcon size={14} /> Search · <kbd style={{ fontFamily: 'inherit', padding: '1px 6px', borderRadius: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.7rem' }}>Ctrl K</kbd>
+          </button>
+        </div>
       </motion.div>
 
       <Tabs defaultValue="learn" className="w-full">
@@ -265,20 +283,77 @@ export default function StudentDashboard() {
 
         <TabsContent value="activity">
 
-      {/* Stats cards */}
-      <div className="dk-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
-        <StatCard icon="📝" iconClass="indigo" value={analytics?.total_submissions || 0} label="Assessments Taken" />
-        <StatCard icon="⭐" iconClass="amber" value={`${analytics?.average_score || 0}%`} label="Average Score" />
-        <StatCard icon="🏆" iconClass="green" value={`${analytics?.best_score || 0}%`} label="Best Score" />
-        <StatCard icon="⚡" iconClass="violet" value={analytics?.xp_points || 0} label="XP Points"
-          sub={`🔥 ${analytics?.streak_days || 0} day streak`} />
-      </div>
+      {/* ═══ YOUR NUMBERS — passive snapshot of where you stand ═══ */}
+      <section className="dk-section-group dk-section-group--stats">
+        <div className="dk-section-eyebrow dk-section-eyebrow--indigo">Your numbers</div>
+        <div className="dk-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+          <StatCard icon="📝" iconClass="indigo" value={analytics?.total_submissions || 0} label="Assessments Taken" />
+          <StatCard icon="⭐" iconClass="amber" value={`${analytics?.average_score || 0}%`} label="Average Score" />
+          <StatCard icon="🏆" iconClass="green" value={`${analytics?.best_score || 0}%`} label="Best Score" />
+          <StatCard icon="⚡" iconClass="violet" value={analytics?.xp_points || 0} label="XP Points"
+            sub={`🔥 ${analytics?.streak_days || 0} day streak`} />
+        </div>
+      </section>
 
-      {/* Competitive Insights */}
+      {/* ═══ MOCK INTERVIEW CTA — primary entry to the adaptive engine ═══ */}
+      <section className="dk-section-group" style={{ marginTop: 8 }}>
+        <div
+          onClick={() => navigate('/interview')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate('/interview')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 16, padding: '20px 24px', borderRadius: 16,
+            background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(168,85,247,0.08))',
+            border: '1px solid rgba(168,85,247,0.25)',
+            boxShadow: '0 14px 32px -16px rgba(99,102,241,0.4)',
+            cursor: 'pointer', flexWrap: 'wrap',
+            transition: 'transform 0.2s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)' }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 14, flexShrink: 0,
+              background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+              display: 'grid', placeItems: 'center', fontSize: 26,
+              boxShadow: '0 0 24px rgba(99,102,241,0.5)',
+            }}>
+              🎙️
+            </div>
+            <div>
+              <h3 style={{
+                fontSize: '1.05rem', fontWeight: 800, color: 'var(--dk-text)',
+                fontFamily: "'Space Grotesk', sans-serif", margin: 0,
+              }}>
+                Start a mock interview
+              </h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--dk-text-muted)', marginTop: 4 }}>
+                Adaptive interviewer — judges every answer, adjusts difficulty, grounds questions in your resume.
+              </p>
+            </div>
+          </div>
+          <div style={{
+            padding: '10px 18px', borderRadius: 10,
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#f1f5f9', fontSize: '0.85rem', fontWeight: 700,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            Begin →
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ INSIGHTS — cyan-tinted analytical zone ═══ */}
       {(analytics?.peer_percentile != null || analytics?.success_prediction != null) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 28 }}>
+        <section className="dk-section-group dk-section-group--insights">
+          <div className="dk-section-eyebrow dk-section-eyebrow--cyan">Competitive insights</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
           {/* Peer Percentile */}
-          <div className="dk-card" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <div className="dk-card dk-card--insight" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <div style={{
               width: 64, height: 64, borderRadius: '50%', flexShrink: 0,
               background: `conic-gradient(#10b981 ${(analytics.peer_percentile || 50) * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
@@ -301,7 +376,7 @@ export default function StudentDashboard() {
           </div>
 
           {/* Interview Readiness */}
-          <div className="dk-card" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <div className="dk-card dk-card--insight" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <div style={{
               width: 64, height: 64, borderRadius: '50%', flexShrink: 0,
               background: `conic-gradient(#6366f1 ${(analytics.success_prediction || 50) * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
@@ -322,45 +397,51 @@ export default function StudentDashboard() {
               </p>
             </div>
           </div>
-        </div>
+          </div>
+        </section>
       )}
 
-      {/* Charts row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 28 }}>
-        <div className="dk-card">
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 20 }}>🎯 Skill Radar</h3>
-          {hasRadarData && analytics?.total_submissions > 0 ? (
-            <div style={{ maxWidth: 280, margin: '0 auto' }}>
-              <Radar data={radarData} options={radarOptions} />
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--dk-text-muted)' }}>
-              <div style={{ fontSize: '2rem', marginBottom: 10 }}>📊</div>
-              <p style={{ fontSize: '0.83rem' }}>Complete an assessment to see your radar!</p>
-            </div>
-          )}
-        </div>
+      {/* ═══ PERFORMANCE — neutral analytical charts ═══ */}
+      <section className="dk-section-group dk-section-group--performance">
+        <div className="dk-section-eyebrow">Performance</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+          <div className="dk-card">
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 20 }}>🎯 Skill Radar</h3>
+            {hasRadarData && analytics?.total_submissions > 0 ? (
+              <div style={{ maxWidth: 280, margin: '0 auto' }}>
+                <Radar data={radarData} options={radarOptions} />
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--dk-text-muted)' }}>
+                <div style={{ fontSize: '2rem', marginBottom: 10 }}>📊</div>
+                <p style={{ fontSize: '0.83rem' }}>Complete an assessment to see your radar!</p>
+              </div>
+            )}
+          </div>
 
-        <div className="dk-card">
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 20 }}>📈 Score History</h3>
-          {hasScoreHistory ? (
-            <div style={{ height: 190 }}>
-              <Bar data={barData} options={barOptions} />
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--dk-text-muted)' }}>
-              <div style={{ fontSize: '2rem', marginBottom: 10 }}>📉</div>
-              <p style={{ fontSize: '0.83rem' }}>No submission history yet.</p>
-            </div>
-          )}
+          <div className="dk-card">
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 20 }}>📈 Score History</h3>
+            {hasScoreHistory ? (
+              <div style={{ height: 190 }}>
+                <Bar data={barData} options={barOptions} />
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--dk-text-muted)' }}>
+                <div style={{ fontSize: '2rem', marginBottom: 10 }}>📉</div>
+                <p style={{ fontSize: '0.83rem' }}>No submission history yet.</p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Daily Plan Widget */}
+      {/* ═══ TODAY'S FOCUS — featured action callout ═══ */}
       {dailyPlan && (
-        <div className="dk-card" style={{ marginBottom: 24 }}>
+        <section className="dk-section-group dk-section-group--action" style={{ marginBottom: 28 }}>
+          <div className="dk-section-eyebrow dk-section-eyebrow--violet">Today's focus</div>
+        <div className="dk-card dk-card--featured" style={{ marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>📋 Today's Prep Plan</h3>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--dk-text)' }}>📋 Today's Prep Plan</h3>
             <span style={{ fontSize: '0.72rem', color: 'var(--dk-text-muted)' }}>
               ~{dailyPlan.estimated_total_min} min • {dailyPlan.focus_area}
             </span>
@@ -410,13 +491,16 @@ export default function StudentDashboard() {
             </div>
           )}
         </div>
+        </section>
       )}
 
-      {/* Level Progress + Badge Showcase + Leaderboard row */}
+      {/* ═══ PROGRESS & COMMUNITY — violet-tinted gamification region ═══ */}
       {gamification && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 28 }}>
+        <section className="dk-section-group dk-section-group--gamification">
+          <div className="dk-section-eyebrow dk-section-eyebrow--violet">Progress &amp; community</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
           {/* Level Progress */}
-          <div className="dk-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="dk-card dk-card--gamification" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>🎖️ Level Progress</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{
@@ -458,7 +542,7 @@ export default function StudentDashboard() {
           </div>
 
           {/* Badge Showcase */}
-          <div className="dk-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="dk-card dk-card--gamification" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>
               🏅 Badges Earned ({gamification.total_badges})
             </h3>
@@ -518,7 +602,7 @@ export default function StudentDashboard() {
 
           {/* Leaderboard */}
           {leaderboard && (
-            <div className="dk-card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="dk-card dk-card--gamification" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>🏆 Leaderboard</h3>
                 <span style={{ fontSize: '0.72rem', color: 'var(--dk-primary-light)', fontWeight: 600 }}>
@@ -573,11 +657,13 @@ export default function StudentDashboard() {
               </div>
             </div>
           )}
-        </div>
+          </div>
+        </section>
       )}
 
-      {/* My Classrooms */}
-      <div style={{ marginBottom: 32 }}>
+      {/* ═══ MY CLASSROOMS — action region ═══ */}
+      <section className="dk-section-group dk-section-group--action" style={{ marginBottom: 28 }}>
+        <div className="dk-section-eyebrow dk-section-eyebrow--indigo">Classrooms</div>
         <div className="dk-section-title">
           <h2>🏫 My Classrooms</h2>
           <div className="line" />
@@ -587,7 +673,7 @@ export default function StudentDashboard() {
         </div>
 
         {classrooms.length === 0 ? (
-          <div className="dk-card" style={{ textAlign: 'center', padding: '36px', cursor: 'pointer' }} onClick={() => setShowJoin(true)}>
+          <div className="dk-card dk-card--action" style={{ textAlign: 'center', padding: '36px', cursor: 'pointer' }} onClick={() => setShowJoin(true)}>
             <div style={{ fontSize: '2rem', marginBottom: 12 }}>🏫</div>
             <div style={{ fontWeight: 600, color: 'var(--dk-text)', marginBottom: 6 }}>No classrooms yet</div>
             <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.85rem', marginBottom: 20 }}>
@@ -602,15 +688,16 @@ export default function StudentDashboard() {
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Adaptive pathway */}
+      {/* ═══ LEARNING PATHWAY — cyan insight region ═══ */}
       {analytics?.pathway_steps?.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
+        <section className="dk-section-group dk-section-group--insights" style={{ marginBottom: 28 }}>
+          <div className="dk-section-eyebrow dk-section-eyebrow--cyan">Personalized guidance</div>
           <div className="dk-section-title"><h2>🧭 Learning Pathway</h2><div className="line" /></div>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }} className="dk-stagger">
             {analytics.pathway_steps.map((step, i) => (
-              <div key={i} className="dk-card" style={{ flex: '1', minWidth: 280 }}>
+              <div key={i} className="dk-card dk-card--insight" style={{ flex: '1', minWidth: 280 }}>
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                   <div style={{ fontSize: '1.4rem' }}>🎯</div>
                   <div>
@@ -630,14 +717,15 @@ export default function StudentDashboard() {
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Available Assessments */}
-      <div>
+      {/* ═══ AVAILABLE ASSESSMENTS — primary action region ═══ */}
+      <section className="dk-section-group dk-section-group--action">
+        <div className="dk-section-eyebrow dk-section-eyebrow--indigo">Take action</div>
         <div className="dk-section-title"><h2>🎓 Available Assessments</h2><div className="line" /></div>
         {assessments.length === 0 ? (
-          <div className="dk-card" style={{ textAlign: 'center', padding: '48px' }}>
+          <div className="dk-card dk-card--action" style={{ textAlign: 'center', padding: '48px' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📭</div>
             <p style={{ color: 'var(--dk-text-muted)' }}>No assessments available yet. Check back soon!</p>
           </div>
@@ -690,7 +778,7 @@ export default function StudentDashboard() {
             ))}
           </div>
         )}
-      </div>
+      </section>
         </TabsContent>
       </Tabs>
     </DarkLayout>

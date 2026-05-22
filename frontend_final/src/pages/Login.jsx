@@ -76,7 +76,36 @@ export default function Login() {
         }
       }, 600)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Login failed. Check your credentials.')
+      // Verbose logging so we can see exactly what the backend returned.
+      // Look in DevTools → Console.
+      console.error('[Login] error:', {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+        request_exists: !!err?.request,
+        response_exists: !!err?.response,
+      })
+
+      const status = err?.response?.status
+      const data = err?.response?.data
+      const detail = data?.detail
+
+      let msg
+      if (Array.isArray(detail)) {
+        msg = detail.map(d => d?.msg || JSON.stringify(d)).join(', ')
+      } else if (typeof detail === 'string') {
+        msg = detail
+      } else if (err?.request && !err?.response) {
+        msg = 'Cannot reach server. Is the backend running?'
+      } else if (status >= 500) {
+        msg = `Server error ${status}. Check backend terminal for the traceback.`
+      } else if (status) {
+        // Surface whatever the server sent so the bug is visible instead of swallowed.
+        msg = `HTTP ${status}: ${typeof data === 'string' ? data : JSON.stringify(data)}`
+      } else {
+        msg = err?.message || 'Login failed. Check your credentials.'
+      }
+      setError(msg)
     } finally {
       setLoading(false)
     }

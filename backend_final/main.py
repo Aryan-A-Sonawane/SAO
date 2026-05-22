@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from config import settings
 from database import create_tables
-from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, analytics_routes, user_routes, gamification_routes, interview_routes, planner_routes, track_routes, remediation_routes, classroom_routes, company_routes, learning_path_routes, onboarding_routes, topic_routes, diagnostic_routes, interview_session_routes
+from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, analytics_routes, user_routes, gamification_routes, interview_routes, planner_routes, track_routes, remediation_routes, classroom_routes, company_routes, learning_path_routes, onboarding_routes, topic_routes, diagnostic_routes, interview_session_routes, adaptive_interview_routes
 
 # ─── Add SkillSync backend to Python path ────────────────────────────────────
 SKILLSYNC_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skillsync_coding")
@@ -50,7 +50,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS — allow frontend dev server
+# CORS — allow frontend dev server + Capacitor native WebView origins.
+# Capacitor on Android serves the bundle from http://localhost (or
+# https://localhost when androidScheme=https), and on iOS from capacitor://localhost.
+# These origins must be allowed so the mobile app can call the API.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -58,6 +61,11 @@ app.add_middleware(
             "http://localhost:5173",
             "http://localhost:3000",
             "http://127.0.0.1:5173",
+            # Capacitor native shells
+            "capacitor://localhost",
+            "ionic://localhost",
+            "http://localhost",
+            "https://localhost",
             settings.FRONTEND_URL,
         ] if origin
     ],
@@ -85,6 +93,7 @@ app.include_router(onboarding_routes.router)
 app.include_router(topic_routes.router)
 app.include_router(diagnostic_routes.router)
 app.include_router(interview_session_routes.router)
+app.include_router(adaptive_interview_routes.router)  # Phase 3: server-side adaptive engine
 
 # ─── Mount SkillSync Coding Backend as Sub-Application ──────────────────────
 # All SkillSync routes become available at /api/coding/*

@@ -1,6 +1,8 @@
+from datetime import datetime
 from typing import Optional, List
+import io
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -13,6 +15,11 @@ from services.skill_profile_service import (
     upsert_score,
     classify,
 )
+from services.resume_service import (
+    extract_resume_entities,
+    summarize_resume_for_profile,
+)
+from services.learning_path_service import analyze_resume_for_roles
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -78,6 +85,83 @@ def get_skill_profile(
             "readiness": classify(avg),
         },
     }
+
+
+# ─── Resume endpoints ────────────────────────────────────────────────────────
+# /api/onboarding/analyze-resume handles the first-time upload during onboarding.
+# These two are for the profile page, post-onboarding: viewing what's stored
+# and replacing the resume without re-doing onboarding.
+
+@router.get("/resume-summary")
+def get_resume_summary(current_user: models.User = Depends(get_current_user)):
+    """Return the structured summary of the user's resume — used by the
+    profile UI's "Resume" card to show extracted projects/skills/experience.
+
+    Safe to call even when the user has no resume on file (returns
+    has_resume=False)."""
+    return summarize_resume_for_profile(current_user)
+
+
+@router.post("/resume-replace")
+async def replace_resume(
+    resume: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Replace the user's resume (full reprocess: text + entities + role
+    matches). Used from the profile page when the user updates their resume
+    after initial onboarding. Same processing pipeline as the onboarding
+    /analyze-resume endpoint — kept separate so we don't conflate "first
+    upload" UX with "update" UX in the frontend."""
+    if not resume.filename or not resume.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF resumes are supported.")
+
+    content = await resume.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Resume file too large (max 10MB).")
+
+    # Reuse the same extraction pipeline as onboarding for consistency.
+    try:
+        import pdfplumber
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not read PDF: {str(e)}")
+
+    if not text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Could not extract text from resume. Try a text-based PDF.",
+        )
+
+    current_user.resume_text = text[:8000]
+    current_user.resume_uploaded_at = datetime.utcnow()
+    matches = analyze_resume_for_roles(text)
+    current_user.resume_entities = extract_resume_entities(text)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "success": True,
+        "matches": matches,
+        "summary": summarize_resume_for_profile(current_user),
+        "message": "Resume updated. Future interviews will reference your new experience.",
+    }
+
+
+@router.delete("/resume")
+def delete_resume(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Wipe the user's stored resume text + entities. After this, the
+    interview engine falls back to generic role-based questions."""
+    current_user.resume_text = ""
+    current_user.resume_entities = {}
+    current_user.resume_uploaded_at = None
+    db.commit()
+    return {"success": True, "message": "Resume removed from your profile."}
 
 
 @router.put("/skill-profile/update")
