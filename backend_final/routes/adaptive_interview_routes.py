@@ -17,9 +17,9 @@ After the session enters status='completed', the existing /api/interviews/sessio
 GET endpoint still works to fetch the full record. The Phase 5 post-interview
 report generator (Opus) reads from the same row.
 """
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -61,6 +61,16 @@ class StartRequest(BaseModel):
 
 class AnswerRequest(BaseModel):
     answer: str = Field(..., min_length=1)
+    # Accumulated face-analysis stats from the browser during the interview.
+    # Only present on the final answer that triggers end_reason (frontend sends
+    # stats opportunistically — the engine stores them before building the report).
+    behavioral_stats: Optional[Dict[str, Any]] = None
+
+
+class EndRequest(BaseModel):
+    # Face-analysis stats collected by the browser up to the moment the user
+    # clicked "End interview". Stored on the session before report generation.
+    behavioral_stats: Optional[Dict[str, Any]] = None
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
@@ -127,7 +137,12 @@ def answer(
             detail=f"Cannot submit — session is '{session.status}'. Start a new interview.",
         )
     try:
-        return submit_answer(db=db, session=session, user_answer=data.answer)
+        return submit_answer(
+            db=db,
+            session=session,
+            user_answer=data.answer,
+            behavioral_stats=data.behavioral_stats,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -212,16 +227,24 @@ async def capture_work(
 @router.post("/{session_id}/end")
 def end_manually(
     session_id: int,
+    data: EndRequest = Body(default_factory=EndRequest),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     """User clicked 'End Interview' before the engine decided to stop. Flips
     the session to completed and stamps end_reason='manual_end'. The Phase 5
-    Opus report generator runs against the partial transcript."""
+    Opus report generator runs against the partial transcript.
+
+    Accepts optional behavioral_stats (accumulated face-analysis from browser)
+    which are stored on the session before the Gemini report is generated."""
     session = _load_session_or_404(session_id, db, current_user)
     if session.status != "in_progress":
         raise HTTPException(
             status_code=409,
             detail=f"Session is already '{session.status}'.",
         )
-    return end_interview_manually(db=db, session=session)
+    return end_interview_manually(
+        db=db,
+        session=session,
+        behavioral_stats=data.behavioral_stats,
+    )

@@ -173,16 +173,23 @@ export const adaptiveInterviewApi = {
       })
       .then((r) => r.data),
 
-  answer: (sessionId, answer) =>
+  // behavioralStats is optional — pass only on the last answer / manual end
+  answer: (sessionId, answer, behavioralStats = null) =>
     api
-      .post(`/interviews/adaptive/${sessionId}/answer`, { answer })
+      .post(`/interviews/adaptive/${sessionId}/answer`, {
+        answer,
+        ...(behavioralStats ? { behavioral_stats: behavioralStats } : {}),
+      })
       .then((r) => r.data),
 
   progress: (sessionId) =>
     api.get(`/interviews/adaptive/${sessionId}/progress`).then((r) => r.data),
 
-  end: (sessionId) =>
-    api.post(`/interviews/adaptive/${sessionId}/end`).then((r) => r.data),
+  // behavioralStats collected up to the moment the user clicked End
+  end: (sessionId, behavioralStats = null) =>
+    api.post(`/interviews/adaptive/${sessionId}/end`,
+      behavioralStats ? { behavioral_stats: behavioralStats } : {}
+    ).then((r) => r.data),
 
   // Phase 4: diagram/whiteboard capture. `imageBlob` is a Blob/File of a PNG;
   // `explanation` is an optional typed note that travels alongside the image.

@@ -605,6 +605,7 @@ def submit_answer(
     db: Session,
     session: models.InterviewSession,
     user_answer: str,
+    behavioral_stats: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Process a TEXT answer to the current question. Drives the full pipeline:
       1. Append answer to transcript
@@ -648,6 +649,7 @@ def submit_answer(
         transcript=transcript,
         judgment=judgment,
         last_answer_text=user_answer,
+        behavioral_stats=behavioral_stats,
     )
 
 
@@ -740,6 +742,7 @@ def _apply_judgment_and_transition(
     transcript: List[Dict[str, Any]],
     judgment: Dict[str, Any],
     last_answer_text: str,
+    behavioral_stats: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Shared back half of submit_answer / submit_diagram_answer.
 
@@ -862,6 +865,12 @@ def _apply_judgment_and_transition(
             session.overall_score = round(
                 sum(sum(p["scores"]) / len(p["scores"]) for p in scored) / len(scored), 1
             )
+        # Store behavioral_stats from browser BEFORE building the report so the
+        # communication analysis (eye contact %, expressions, etc.) uses real data.
+        if behavioral_stats:
+            existing = dict(session.behavioral_stats or {})
+            existing.update(behavioral_stats)
+            session.behavioral_stats = existing
         # Persist transcript + state first so _attach_report_to_session reads them
         session.transcript = transcript
         session.state = state
@@ -936,9 +945,16 @@ def _attach_report_to_session(
 
 
 def end_interview_manually(
-    db: Session, session: models.InterviewSession
+    db: Session,
+    session: models.InterviewSession,
+    behavioral_stats: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """User clicked 'End interview' before the engine decided to stop."""
+    """User clicked 'End interview' before the engine decided to stop.
+
+    behavioral_stats: accumulated face-analysis data from the browser
+    (eye contact %, expressions, posture proxy). Stored on the session
+    so the Gemini-backed communication report uses real camera data.
+    """
     state = dict(session.state or {})
     state["end_reason"] = END_REASON_MANUAL
     session.status = "completed"
@@ -953,6 +969,11 @@ def end_interview_manually(
         session.overall_score = round(
             sum(sum(p["scores"]) / len(p["scores"]) for p in scored) / len(scored), 1
         )
+    # Store behavioral_stats BEFORE building the report
+    if behavioral_stats:
+        existing = dict(session.behavioral_stats or {})
+        existing.update(behavioral_stats)
+        session.behavioral_stats = existing
     # Build full Gemini-backed report
     _attach_report_to_session(session, state)
     db.commit()

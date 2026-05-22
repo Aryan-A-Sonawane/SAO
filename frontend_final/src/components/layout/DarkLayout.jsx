@@ -7,11 +7,12 @@ import '../../styles/dashboard-dark.css'
 const SIDEBAR_OPEN_W = 240
 const SIDEBAR_CLOSED_W = 64
 
-export default function DarkLayout({ children }) {
+export default function DarkLayout({ children, sidebarCollapsed = false }) {
     const mouse = useMousePosition()
     const mouseRef = useRef({ nX: 0, nY: 0 })
 
     const [sidebarOpen, setSidebarOpen] = useState(() => {
+        if (sidebarCollapsed) return false
         try {
             const saved = localStorage.getItem('sidebar_open')
             if (saved !== null) return saved === 'true'
@@ -24,7 +25,14 @@ export default function DarkLayout({ children }) {
         mouseRef.current = { nX: mouse.nX, nY: mouse.nY }
     }, [mouse.nX, mouse.nY])
 
+    // Force-collapse when prop says to (e.g. during live interview)
+    useEffect(() => {
+        if (sidebarCollapsed) setSidebarOpen(false)
+    }, [sidebarCollapsed])
+
     const toggleSidebar = () => {
+        // Don't expand if force-collapsed
+        if (sidebarCollapsed) return
         setSidebarOpen(prev => {
             const next = !prev
             try { localStorage.setItem('sidebar_open', String(next)) } catch (_) {}
@@ -32,7 +40,9 @@ export default function DarkLayout({ children }) {
         })
     }
 
-    const sidebarW = sidebarOpen ? SIDEBAR_OPEN_W : SIDEBAR_CLOSED_W
+    // When force-collapsed, always use closed width regardless of local state
+    const effectiveSidebarOpen = sidebarCollapsed ? false : sidebarOpen
+    const sidebarW = effectiveSidebarOpen ? SIDEBAR_OPEN_W : SIDEBAR_CLOSED_W
 
     return (
         <div
@@ -41,17 +51,18 @@ export default function DarkLayout({ children }) {
         >
             <WebGLCanvas mouseRef={mouseRef} particleCount={900} />
 
-            <DarkSidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
+            <DarkSidebar isOpen={effectiveSidebarOpen} onToggle={toggleSidebar} />
 
             <main
                 style={{
                     flex: 1,
                     minWidth: 0,
-                    padding: '32px',
-                    overflowY: 'auto',
+                    padding: sidebarCollapsed ? '0' : '32px',
+                    overflowY: sidebarCollapsed ? 'hidden' : 'auto',
+                    overflow: sidebarCollapsed ? 'hidden' : undefined,
                     position: 'relative',
                     zIndex: 1,
-                    transition: 'padding-left 0.3s ease',
+                    transition: 'padding 0.3s ease',
                 }}
             >
                 {/* Frosted glass surface behind content */}

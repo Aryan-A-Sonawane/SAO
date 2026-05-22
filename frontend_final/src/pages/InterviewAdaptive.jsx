@@ -28,6 +28,7 @@ import {
   Mic, Send, ImagePlus, StopCircle, Clock, Target, Sparkles, AlertCircle,
   CheckCircle2, TrendingUp, TrendingDown, ArrowRight, RotateCcw, Loader2,
   ChevronRight, Award, Brain, Layers, Camera,
+  Eye, Activity, Shield, BadgeCheck, UserCheck, MessageSquare,
 } from 'lucide-react'
 
 import DarkLayout from '../components/layout/DarkLayout'
@@ -122,12 +123,20 @@ function SetupScreen({ user, onStarted }) {
   const [duration, setDuration] = useState(30)
   const [company, setCompany] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showCameraDialog, setShowCameraDialog] = useState(false)
 
-  const start = async () => {
+  // Opens the camera dialog — validates first
+  const handleOpenCameraDialog = () => {
     if (mode === 'company_specific' && !company.trim()) {
       toast.error('Pick a company first.')
       return
     }
+    setShowCameraDialog(true)
+  }
+
+  // Called by CameraSetupDialog when the user clicks "Launch Interview"
+  const handleLaunch = async (streams) => {
+    setShowCameraDialog(false)
     setSubmitting(true)
     try {
       const result = await adaptiveInterviewApi.start({
@@ -135,7 +144,7 @@ function SetupScreen({ user, onStarted }) {
         target_duration_minutes: duration,
         company: mode === 'company_specific' ? company.trim() : undefined,
       })
-      onStarted(result)
+      onStarted(result, streams)   // pass camera streams directly to parent
     } catch (err) {
       const detail = err.response?.data?.detail || err.message || 'Could not start interview.'
       toast.error(detail)
@@ -144,144 +153,156 @@ function SetupScreen({ user, onStarted }) {
   }
 
   return (
-    <div style={{ maxWidth: 880, margin: '0 auto', padding: '32px 24px' }}>
-      <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-        style={{ textAlign: 'center', marginBottom: 32 }}
-      >
-        <h1 style={{
-          fontSize: '2.2rem', fontWeight: 800,
-          fontFamily: "'Space Grotesk', sans-serif", color: 'var(--dk-text)',
-          letterSpacing: '-0.02em', marginBottom: 8,
-        }}>
-          Mock Interview
-        </h1>
-        <p style={{ color: 'var(--dk-text-muted)', fontSize: '1rem', maxWidth: 560, margin: '0 auto' }}>
-          Adaptive interviewer that judges each answer, adjusts difficulty, and grounds
-          questions in your resume. Switches topics when you've shown mastery — or when
-          a topic isn't landing.
-        </p>
-        {user?.target_role && (
-          <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '6px 14px', borderRadius: 999,
-            background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)',
-            fontSize: 13, color: '#a5b4fc',
-          }}>
-            <Target size={13} /> Interviewing for: <strong style={{ color: '#cbd5e1' }}>{user.target_role.replace(/_/g, ' ')}</strong>
-          </div>
-        )}
-      </motion.div>
-
-      {/* Mode picker */}
-      <Section title="Choose a mode">
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-          {MODES.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setMode(m.id)}
-              style={{
-                textAlign: 'left', padding: 16, borderRadius: 14, cursor: 'pointer',
-                background: mode === m.id ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.03)',
-                border: '1px solid ' + (mode === m.id ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.08)'),
-                color: '#f1f5f9', fontFamily: 'Inter, system-ui',
-                transition: 'all 0.2s',
-              }}
-            >
-              <div style={{ fontSize: 22, marginBottom: 6 }}>{m.icon}</div>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{m.label}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>{m.blurb}</div>
-            </button>
-          ))}
-        </div>
-      </Section>
-
-      {/* Duration */}
-      <Section title="Target duration">
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {DURATION_OPTIONS.map((d) => (
-            <button
-              key={d}
-              onClick={() => setDuration(d)}
-              style={{
-                padding: '10px 18px', borderRadius: 10,
-                background: duration === d ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.03)',
-                border: '1px solid ' + (duration === d ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.08)'),
-                color: '#f1f5f9', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'Inter, system-ui',
-              }}
-            >
-              {d} min
-            </button>
-          ))}
-        </div>
-        <p style={{ marginTop: 10, color: '#64748b', fontSize: 12 }}>
-          The engine wraps up once you hit the target time and have covered enough
-          topics. It will hard-cap at 1.5× this duration to keep things bounded.
-        </p>
-      </Section>
-
-      {/* Company input — only for company_specific mode */}
+    <>
+      {/* Camera assignment dialog — shown as modal overlay */}
       <AnimatePresence>
-        {mode === 'company_specific' && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            <Section title="Company">
-              <input
-                type="text"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                placeholder="e.g. Google, Stripe, Razorpay"
-                style={{
-                  width: '100%', boxSizing: 'border-box',
-                  padding: '12px 14px', borderRadius: 10,
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  color: '#f1f5f9', fontSize: 14, fontFamily: 'Inter, system-ui',
-                }}
-              />
-            </Section>
-          </motion.div>
+        {showCameraDialog && (
+          <CameraSetupDialog
+            onLaunch={handleLaunch}
+            onClose={() => setShowCameraDialog(false)}
+          />
         )}
       </AnimatePresence>
 
-      {/* Start button */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
-        <button
-          onClick={start}
-          disabled={submitting}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 10,
-            padding: '14px 32px', borderRadius: 14,
-            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-            color: '#fff', border: 'none',
-            fontSize: 16, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif",
-            cursor: submitting ? 'wait' : 'pointer',
-            boxShadow: '0 12px 32px -12px rgba(99,102,241,0.6)',
-            opacity: submitting ? 0.7 : 1,
-          }}
+      <div style={{ maxWidth: 880, margin: '0 auto', padding: '32px 24px' }}>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          style={{ textAlign: 'center', marginBottom: 32 }}
         >
-          {submitting ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-          {submitting ? 'Starting interview…' : 'Start interview'}
-        </button>
-      </div>
+          <h1 style={{
+            fontSize: '2.2rem', fontWeight: 800,
+            fontFamily: "'Space Grotesk', sans-serif", color: 'var(--dk-text)',
+            letterSpacing: '-0.02em', marginBottom: 8,
+          }}>
+            Mock Interview
+          </h1>
+          <p style={{ color: 'var(--dk-text-muted)', fontSize: '1rem', maxWidth: 560, margin: '0 auto' }}>
+            Adaptive interviewer that judges each answer, adjusts difficulty, and grounds
+            questions in your resume. Switches topics when you've shown mastery — or when
+            a topic isn't landing.
+          </p>
+          {user?.target_role && (
+            <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '6px 14px', borderRadius: 999,
+              background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)',
+              fontSize: 13, color: '#a5b4fc',
+            }}>
+              <Target size={13} /> Interviewing for: <strong style={{ color: '#cbd5e1' }}>{user.target_role.replace(/_/g, ' ')}</strong>
+            </div>
+          )}
+        </motion.div>
 
-      {/* No-resume nudge */}
-      {!user?.has_resume && (
-        <div style={{
-          marginTop: 24, padding: 14, borderRadius: 12,
-          background: 'rgba(245,158,11,0.06)',
-          border: '1px solid rgba(245,158,11,0.2)',
-          color: '#fbbf24', fontSize: 13, textAlign: 'center', maxWidth: 600, margin: '24px auto 0',
-        }}>
-          💡 No resume on file. Questions will be generic. Upload one from your{' '}
-          <a href="/profile" style={{ color: '#fde047', textDecoration: 'underline' }}>profile</a>{' '}
-          to get experience-grounded questions.
+        {/* Mode picker */}
+        <Section title="Choose a mode">
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                style={{
+                  textAlign: 'left', padding: 16, borderRadius: 14, cursor: 'pointer',
+                  background: mode === m.id ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.03)',
+                  border: '1px solid ' + (mode === m.id ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.08)'),
+                  color: '#f1f5f9', fontFamily: 'Inter, system-ui',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{m.icon}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>{m.blurb}</div>
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        {/* Duration */}
+        <Section title="Target duration">
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {DURATION_OPTIONS.map((d) => (
+              <button
+                key={d}
+                onClick={() => setDuration(d)}
+                style={{
+                  padding: '10px 18px', borderRadius: 10,
+                  background: duration === d ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.03)',
+                  border: '1px solid ' + (duration === d ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.08)'),
+                  color: '#f1f5f9', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'Inter, system-ui',
+                }}
+              >
+                {d} min
+              </button>
+            ))}
+          </div>
+          <p style={{ marginTop: 10, color: '#64748b', fontSize: 12 }}>
+            The engine wraps up once you hit the target time and have covered enough
+            topics. It will hard-cap at 1.5× this duration to keep things bounded.
+          </p>
+        </Section>
+
+        {/* Company input — only for company_specific mode */}
+        <AnimatePresence>
+          {mode === 'company_specific' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <Section title="Company">
+                <input
+                  type="text"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder="e.g. Google, Stripe, Razorpay"
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    padding: '12px 14px', borderRadius: 10,
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: '#f1f5f9', fontSize: 14, fontFamily: 'Inter, system-ui',
+                  }}
+                />
+              </Section>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Start button — opens camera dialog */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
+          <button
+            onClick={handleOpenCameraDialog}
+            disabled={submitting}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              padding: '14px 32px', borderRadius: 14,
+              background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+              color: '#fff', border: 'none',
+              fontSize: 16, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif",
+              cursor: submitting ? 'wait' : 'pointer',
+              boxShadow: '0 12px 32px -12px rgba(99,102,241,0.6)',
+              opacity: submitting ? 0.7 : 1,
+            }}
+          >
+            {submitting ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
+            {submitting ? 'Starting interview…' : 'Start interview'}
+          </button>
         </div>
-      )}
-    </div>
+
+        {/* No-resume nudge */}
+        {!user?.has_resume && (
+          <div style={{
+            marginTop: 24, padding: 14, borderRadius: 12,
+            background: 'rgba(245,158,11,0.06)',
+            border: '1px solid rgba(245,158,11,0.2)',
+            color: '#fbbf24', fontSize: 13, textAlign: 'center', maxWidth: 600, margin: '24px auto 0',
+          }}>
+            💡 No resume on file. Questions will be generic. Upload one from your{' '}
+            <a href="/profile" style={{ color: '#fde047', textDecoration: 'underline' }}>profile</a>{' '}
+            to get experience-grounded questions.
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -716,15 +737,21 @@ function CameraSlotPreview({ stream }) {
   )
 }
 
-function CameraSetupScreen({ onReady }) {
+// ─── Camera Setup Dialog (modal overlay) ─────────────────────────────────────
+// Opens on top of SetupScreen when the user clicks "Start interview".
+// Manages camera enumeration, per-slot dropdown assignment, and live previews.
+// Calls onLaunch(streams) when ready — parent does the API call.
+function CameraSetupDialog({ onLaunch, onClose }) {
   const [devices, setDevices] = useState([])
   const [assignments, setAssignments] = useState({ front: '', top: '', side: '' })
   const [streams, setStreams] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // keyed by deviceId → stream; cleared before handover so unmount cleanup is safe
   const activeStreamsRef = useRef({})
+  const handedOverRef = useRef(false)
 
-  // Request permission + enumerate cameras
+  // Request permission + enumerate cameras on open
   useEffect(() => {
     ;(async () => {
       try {
@@ -732,161 +759,301 @@ function CameraSetupScreen({ onReady }) {
         const devs = await navigator.mediaDevices.enumerateDevices()
         const cams = devs.filter((d) => d.kind === 'videoinput')
         setDevices(cams)
+        // Auto-assign first camera to front
         if (cams[0]) setAssignments((a) => ({ ...a, front: cams[0].deviceId }))
-      } catch (e) {
-        setError('Camera access denied. Grant permission and refresh.')
+      } catch {
+        setError('Camera access denied — grant permission and try again.')
       } finally {
         setLoading(false)
       }
     })()
     return () => {
-      // Stop all preview streams on unmount
-      Object.values(activeStreamsRef.current).forEach((s) => s?.getTracks().forEach((t) => t.stop()))
+      // Only stop streams if the user closed/skipped (not launched)
+      if (!handedOverRef.current) {
+        Object.values(activeStreamsRef.current).forEach((s) => s?.getTracks().forEach((t) => t.stop()))
+      }
     }
   }, [])
 
-  // Open/close streams when assignments change
+  // Open a stream when a slot's deviceId changes
   useEffect(() => {
-    Object.entries(assignments).forEach(async ([slot, deviceId]) => {
-      if (!deviceId) return
-      if (activeStreamsRef.current[deviceId]) {
-        setStreams((s) => ({ ...s, [slot]: activeStreamsRef.current[deviceId] }))
-        return
-      }
+    Object.entries(assignments).forEach(async ([, deviceId]) => {
+      if (!deviceId || activeStreamsRef.current[deviceId]) return
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
         })
         activeStreamsRef.current[deviceId] = stream
-        setStreams((s) => ({ ...s, [slot]: stream }))
+        // Trigger preview re-render
+        setStreams((prev) => ({ ...prev }))
       } catch (_) {}
     })
   }, [assignments])
 
-  const handleStart = () => {
+  // Build a { front, top, side } map from current assignments
+  const buildStreamMap = () => {
     const out = {}
     CAMERA_SLOTS.forEach(({ key }) => {
       const devId = assignments[key]
-      if (devId && activeStreamsRef.current[devId]) {
-        out[key] = activeStreamsRef.current[devId]
-      }
+      if (devId && activeStreamsRef.current[devId]) out[key] = activeStreamsRef.current[devId]
     })
-    onReady(out)
+    return out
   }
 
-  if (loading) return (
-    <div style={{ display: 'grid', placeItems: 'center', minHeight: 360, color: '#94a3b8' }}>
-      <Loader2 size={28} className="animate-spin" />
-    </div>
-  )
+  const handleLaunch = () => {
+    const streamMap = buildStreamMap()
+    // Clear ref so unmount cleanup doesn't kill the streams we're handing over
+    handedOverRef.current = true
+    activeStreamsRef.current = {}
+    onLaunch(streamMap)
+  }
+
+  const handleSkip = () => {
+    // Stop everything — no cameras going live
+    Object.values(activeStreamsRef.current).forEach((s) => s?.getTracks().forEach((t) => t.stop()))
+    activeStreamsRef.current = {}
+    handedOverRef.current = true
+    onLaunch({})
+  }
+
+  const handleClose = () => {
+    // User dismissed without launching — stop all streams
+    Object.values(activeStreamsRef.current).forEach((s) => s?.getTracks().forEach((t) => t.stop()))
+    activeStreamsRef.current = {}
+    handedOverRef.current = true
+    onClose()
+  }
+
+  const frontAssigned = !!assignments.front
 
   return (
+    // Full-screen backdrop
     <motion.div
-      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-      style={{ maxWidth: 940, margin: '0 auto', padding: '32px 24px' }}
+      key="camera-dialog-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(5,5,10,0.80)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '20px',
+      }}
     >
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '6px 16px', borderRadius: 999, marginBottom: 12,
-          background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)',
-          fontSize: 12, color: '#a5b4fc', fontWeight: 600,
-        }}>
-          <Camera size={13} /> Camera Setup
-        </div>
-        <h2 style={{
-          fontSize: '1.7rem', fontWeight: 800, color: '#f1f5f9',
-          fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em', marginBottom: 8,
-        }}>
-          Position your cameras
-        </h2>
-        <p style={{ color: '#64748b', fontSize: 13, maxWidth: 480, margin: '0 auto' }}>
-          Front camera is required. Top and side cameras are optional but enable full body-language analysis.
-        </p>
-      </div>
-
-      {error && (
-        <div style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#fca5a5', fontSize: 13, marginBottom: 20, textAlign: 'center' }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginBottom: 28 }}>
-        {CAMERA_SLOTS.map(({ key, label, required, icon, hint }) => (
-          <motion.div
-            key={key}
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 16 }}
+        transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+        style={{
+          width: '100%', maxWidth: 900,
+          background: 'linear-gradient(160deg, #0d0d1f 0%, #080814 100%)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          borderRadius: 22,
+          padding: '32px 28px',
+          maxHeight: '92vh', overflowY: 'auto',
+          boxShadow: '0 40px 80px -20px rgba(0,0,0,0.7), 0 0 0 1px rgba(99,102,241,0.1)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+          <div>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              padding: '5px 14px', borderRadius: 999, marginBottom: 10,
+              background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.28)',
+              fontSize: 11, color: '#a5b4fc', fontWeight: 700, letterSpacing: 0.5,
+              textTransform: 'uppercase',
+            }}>
+              <Camera size={12} /> Camera Setup
+            </div>
+            <h2 style={{
+              fontSize: '1.5rem', fontWeight: 800, color: '#f1f5f9',
+              fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em',
+              margin: 0,
+            }}>
+              Assign your cameras
+            </h2>
+            <p style={{ color: '#64748b', fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>
+              Front is required for face analysis. Top and side are optional — top catches cheating / written diagrams, side scores posture &amp; body language.
+            </p>
+          </div>
+          {/* Close × */}
+          <button
+            onClick={handleClose}
             style={{
-              background: required ? 'rgba(99,102,241,0.05)' : 'rgba(255,255,255,0.02)',
-              border: `1px solid ${required ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.07)'}`,
-              borderRadius: 16, padding: 16,
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8, color: '#64748b', cursor: 'pointer',
+              width: 32, height: 32, display: 'grid', placeItems: 'center', flexShrink: 0,
+              fontSize: 16, lineHeight: 1,
             }}
+            title="Cancel"
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <span style={{ fontSize: 18 }}>{icon}</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>
-                  {label} {required && <span style={{ color: '#6366f1', fontSize: 10 }}>REQUIRED</span>}
-                  {!required && <span style={{ color: '#475569', fontSize: 10 }}>OPTIONAL</span>}
+            ×
+          </button>
+        </div>
+
+        {/* Error banner */}
+        {error && (
+          <div style={{
+            padding: '11px 16px', borderRadius: 12, marginBottom: 20,
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+            color: '#fca5a5', fontSize: 13, textAlign: 'center',
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Loading spinner while enumerating */}
+        {loading ? (
+          <div style={{ display: 'grid', placeItems: 'center', height: 220 }}>
+            <Loader2 size={28} className="animate-spin" style={{ color: '#6366f1' }} />
+          </div>
+        ) : (
+          <>
+            {/* 3-column camera grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: devices.length === 0 ? '1fr' : 'repeat(3, 1fr)',
+              gap: 16,
+              marginBottom: 28,
+            }}>
+              {CAMERA_SLOTS.map(({ key, label, required, icon, hint }) => (
+                <div
+                  key={key}
+                  style={{
+                    background: required
+                      ? 'rgba(99,102,241,0.05)'
+                      : assignments[key]
+                        ? 'rgba(16,185,129,0.04)'
+                        : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${
+                      required
+                        ? 'rgba(99,102,241,0.22)'
+                        : assignments[key]
+                          ? 'rgba(16,185,129,0.2)'
+                          : 'rgba(255,255,255,0.07)'
+                    }`,
+                    borderRadius: 16,
+                    padding: 16,
+                    transition: 'border-color 0.2s, background 0.2s',
+                  }}
+                >
+                  {/* Slot header */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 20, lineHeight: 1 }}>{icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        fontSize: 13, fontWeight: 700, color: '#f1f5f9',
+                      }}>
+                        {label}
+                        {required && (
+                          <span style={{
+                            padding: '1px 6px', borderRadius: 4, fontSize: 9, fontWeight: 800,
+                            background: 'rgba(99,102,241,0.2)', color: '#818cf8',
+                            letterSpacing: 0.5, textTransform: 'uppercase',
+                          }}>
+                            Required
+                          </span>
+                        )}
+                        {!required && assignments[key] && (
+                          <span style={{
+                            padding: '1px 6px', borderRadius: 4, fontSize: 9, fontWeight: 800,
+                            background: 'rgba(16,185,129,0.2)', color: '#34d399',
+                            letterSpacing: 0.5, textTransform: 'uppercase',
+                          }}>
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#475569', marginTop: 3, lineHeight: 1.4 }}>{hint}</div>
+                    </div>
+                  </div>
+
+                  {/* Dropdown */}
+                  <select
+                    value={assignments[key]}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setAssignments((a) => ({ ...a, [key]: val }))
+                      if (!val) setStreams((s) => { const n = { ...s }; delete n[key]; return n })
+                    }}
+                    style={{
+                      width: '100%', padding: '9px 11px', borderRadius: 9, marginBottom: 12,
+                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.11)',
+                      color: '#f1f5f9', fontSize: 12, fontFamily: 'Inter, system-ui',
+                      cursor: 'pointer', outline: 'none',
+                      appearance: 'auto',
+                    }}
+                  >
+                    <option value="">— None / Skip —</option>
+                    {devices.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label || `Camera ${d.deviceId.slice(0, 8)}…`}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Live preview thumbnail */}
+                  <CameraSlotPreview
+                    stream={assignments[key] ? activeStreamsRef.current[assignments[key]] || null : null}
+                  />
                 </div>
-                <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>{hint}</div>
-              </div>
+              ))}
             </div>
 
-            {/* Camera selector */}
-            <select
-              value={assignments[key]}
-              onChange={(e) => {
-                setAssignments((a) => ({ ...a, [key]: e.target.value }))
-                if (!e.target.value) setStreams((s) => { const n = { ...s }; delete n[key]; return n })
-              }}
-              style={{
-                width: '100%', padding: '8px 10px', borderRadius: 8, marginBottom: 10,
-                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                color: '#f1f5f9', fontSize: 12, fontFamily: 'Inter, system-ui',
-              }}
-            >
-              <option value="">— None —</option>
-              {devices.map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>
-                  {d.label || `Camera ${d.deviceId.slice(0, 6)}`}
-                </option>
-              ))}
-            </select>
+            {/* No cameras found note */}
+            {devices.length === 0 && !error && (
+              <p style={{ color: '#475569', fontSize: 13, textAlign: 'center', marginBottom: 20 }}>
+                No camera devices detected. You can still proceed with text-only mode.
+              </p>
+            )}
 
-            <CameraSlotPreview stream={streams[key] || null} />
-          </motion.div>
-        ))}
-      </div>
+            {/* Action buttons */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <button
+                onClick={handleSkip}
+                style={{
+                  padding: '11px 22px', borderRadius: 11,
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'Inter, system-ui', transition: 'background 0.15s',
+                }}
+              >
+                Skip — text only
+              </button>
+              <button
+                onClick={handleLaunch}
+                disabled={devices.length > 0 && !frontAssigned}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  padding: '12px 30px', borderRadius: 12,
+                  background: devices.length > 0 && !frontAssigned
+                    ? 'rgba(99,102,241,0.3)'
+                    : 'linear-gradient(135deg,#6366f1,#a855f7)',
+                  color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, cursor: devices.length > 0 && !frontAssigned ? 'not-allowed' : 'pointer',
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  boxShadow: devices.length > 0 && !frontAssigned ? 'none' : '0 10px 28px -10px rgba(99,102,241,0.55)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <Sparkles size={16} />
+                {devices.length > 0 && !frontAssigned ? 'Select front camera first' : 'Launch Interview →'}
+              </button>
+            </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <button
-          onClick={() => onReady({})}
-          style={{
-            padding: '11px 22px', borderRadius: 11,
-            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            fontFamily: 'Inter, system-ui',
-          }}
-        >
-          Skip — text only
-        </button>
-        <button
-          onClick={handleStart}
-          disabled={!assignments.front && devices.length > 0}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '12px 28px', borderRadius: 12,
-            background: 'linear-gradient(135deg,#6366f1,#a855f7)',
-            color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-            fontFamily: "'Space Grotesk', sans-serif",
-            opacity: !assignments.front && devices.length > 0 ? 0.5 : 1,
-            boxShadow: '0 10px 28px -10px rgba(99,102,241,0.5)',
-          }}
-        >
-          <Sparkles size={16} /> All looks good — start interview
-        </button>
-      </div>
+            {/* Helper note */}
+            <p style={{ textAlign: 'center', color: '#334155', fontSize: 11, marginTop: 16 }}>
+              Tip: You can assign the same physical camera to multiple slots — the stream is shared, not duplicated.
+            </p>
+          </>
+        )}
+      </motion.div>
     </motion.div>
   )
 }
@@ -965,46 +1132,255 @@ function useLiveFaceAnalysis(videoRef, active = true) {
   return analysis
 }
 
+// ─── Capture a single frame from a video element → ImageData ────────────────
+function captureFrameFromVideo(videoEl) {
+  if (!videoEl || videoEl.readyState < 2 || videoEl.videoWidth === 0) return null
+  const canvas = document.createElement('canvas')
+  canvas.width  = videoEl.videoWidth
+  canvas.height = videoEl.videoHeight
+  canvas.getContext('2d').drawImage(videoEl, 0, 0)
+  return canvas
+}
+
+// ─── Top-camera monitor: anti-cheat (face-api gaze-down + canvas phone detection) ──
+// Checks every 12s:
+//   1. Canvas brightness analysis — a sudden bright rectangle in the frame
+//      is very likely a phone or tablet screen.
+//   2. Face detection — a face visible in a top-down frame means the person
+//      is leaning very close to the desk (reading notes, phone, etc.).
+//   3. Legacy gaze-down via nose-tip landmark.
+// Returns live alert state for display chip.
+function useTopCameraMonitor(topVideoRef, behavioralRef, active = true) {
+  const [liveAlert, setLiveAlert] = useState(null)  // null | 'screen' | 'lean' | 'gaze_down'
+  const prevBrightnessRef = useRef(null)
+
+  useEffect(() => {
+    if (!active) return
+    let cancelled = false
+    const intervalMs = 12000
+
+    const run = async () => {
+      if (cancelled) return
+      const video = topVideoRef.current
+      if (!video || video.readyState < 2 || video.videoWidth === 0) return
+
+      // ── 1. Canvas brightness / phone-screen detection ──────────────────────
+      let phoneDetected = false
+      try {
+        const W = 160, H = 120
+        const offscreen = document.createElement('canvas')
+        offscreen.width = W; offscreen.height = H
+        const ctx = offscreen.getContext('2d')
+        ctx.drawImage(video, 0, 0, W, H)
+        const pixels = ctx.getImageData(0, 0, W, H).data
+
+        let totalLuma = 0
+        let veryBrightPx = 0
+        for (let i = 0; i < pixels.length; i += 4) {
+          const luma = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]
+          totalLuma += luma
+          if (luma > 210) veryBrightPx++
+        }
+        const avgLuma = totalLuma / (W * H)
+        const brightRatio = veryBrightPx / (W * H)
+
+        // Phone screen = large bright region, OR sudden luma spike vs prev frame
+        const prevLuma = prevBrightnessRef.current
+        const lumaSpike = prevLuma !== null && (avgLuma - prevLuma) > 35
+        phoneDetected = brightRatio > 0.12 || lumaSpike
+        prevBrightnessRef.current = avgLuma
+      } catch (_) {}
+
+      // ── 2. Face detection (leaning + gaze-down) ────────────────────────────
+      let faceAlert = null
+      try {
+        await loadFaceApiModels()
+        if (!faceApiReady) return
+        const result = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.35 }))
+          .withFaceLandmarks()
+
+        if (result && !cancelled) {
+          // Face in top-down cam → leaning close to desk
+          faceAlert = 'lean'
+          // Gaze-down check: nose tip below face center (reading from table)
+          const box  = result.detection.box
+          const nose = result.landmarks.getNose()[3]
+          const faceCentreY = box.y + box.height / 2
+          if (nose.y > faceCentreY + box.height * 0.15) faceAlert = 'gaze_down'
+        }
+      } catch (_) {}
+
+      if (cancelled) return
+
+      // ── 3. Accumulate to behavioralRef ─────────────────────────────────────
+      const sRef = behavioralRef.current
+      sRef.topCamChecks = (sRef.topCamChecks || 0) + 1
+      const flagged = phoneDetected || faceAlert !== null
+      if (flagged) sRef.topCamAlerts = (sRef.topCamAlerts || 0) + 1
+      if (phoneDetected) sRef.topCamPhoneAlerts = (sRef.topCamPhoneAlerts || 0) + 1
+      if (faceAlert === 'lean' || faceAlert === 'gaze_down') sRef.topCamLeanAlerts = (sRef.topCamLeanAlerts || 0) + 1
+
+      // ── 4. Live chip ────────────────────────────────────────────────────────
+      if (phoneDetected) setLiveAlert('screen')
+      else if (faceAlert) setLiveAlert(faceAlert)
+      else setLiveAlert(null)
+    }
+
+    const id = setInterval(run, intervalMs)
+    run()
+    return () => { cancelled = true; clearInterval(id) }
+  }, [active, topVideoRef, behavioralRef])
+
+  return liveAlert
+}
+
+// ─── Side-camera posture + motion monitor ────────────────────────────────────
+// Runs every 4s:
+//   1. Canvas pixel-diff motion detection across 3 vertical zones:
+//      upper (head/shoulders), mid (hands/arms), lower (legs).
+//      High diff in each zone → nervousness/fidgeting signal.
+//   2. Face-api head-tilt posture check (existing logic).
+// Returns live state object for display chips.
+function useSideCameraPosture(sideVideoRef, behavioralRef, active = true) {
+  const [livePosture, setLivePosture] = useState({ hands: 'unknown', legs: 'unknown', upright: null })
+  const prevFrameRef = useRef(null)
+  const MOTION_THRESHOLD = 14   // average per-channel diff > 14 = notable motion
+  const W = 80, H = 120
+
+  useEffect(() => {
+    if (!active) return
+    let cancelled = false
+    const intervalMs = 4000
+
+    const run = async () => {
+      if (cancelled) return
+      const video = sideVideoRef.current
+      if (!video || video.readyState < 2 || video.videoWidth === 0) return
+
+      // ── 1. Canvas motion diff ─────────────────────────────────────────────
+      const offscreen = document.createElement('canvas')
+      offscreen.width = W; offscreen.height = H
+      const ctx = offscreen.getContext('2d')
+      ctx.drawImage(video, 0, 0, W, H)
+      const pixels = ctx.getImageData(0, 0, W, H).data
+
+      const prev = prevFrameRef.current
+      if (prev) {
+        const thirdH = Math.floor(H / 3)
+        let upper = 0, mid = 0, lower = 0
+        for (let i = 0; i < pixels.length; i += 4) {
+          const row = Math.floor((i / 4) / W)
+          const diff = (
+            Math.abs(pixels[i]   - prev[i])   +
+            Math.abs(pixels[i+1] - prev[i+1]) +
+            Math.abs(pixels[i+2] - prev[i+2])
+          ) / 3
+          if (row < thirdH)           upper += diff
+          else if (row < thirdH * 2)  mid   += diff
+          else                        lower += diff
+        }
+        const pixPerThird = W * thirdH || 1
+        const upperScore = upper / pixPerThird
+        const midScore   = mid   / pixPerThird
+        const lowerScore = lower / pixPerThird
+
+        const sRef = behavioralRef.current
+        sRef.sideMotionChecks = (sRef.sideMotionChecks || 0) + 1
+        if (midScore   > MOTION_THRESHOLD) sRef.handMotionCount = (sRef.handMotionCount || 0) + 1
+        if (lowerScore > MOTION_THRESHOLD) sRef.legMotionCount  = (sRef.legMotionCount  || 0) + 1
+        if (upperScore > MOTION_THRESHOLD || midScore > MOTION_THRESHOLD || lowerScore > MOTION_THRESHOLD)
+          sRef.bodyMotionCount = (sRef.bodyMotionCount || 0) + 1
+
+        if (!cancelled) setLivePosture((prev) => ({
+          ...prev,
+          hands: midScore   > MOTION_THRESHOLD ? 'moving' : 'still',
+          legs:  lowerScore > MOTION_THRESHOLD ? 'shaking' : 'still',
+        }))
+      }
+      // Store frame for next comparison (clone the typed array)
+      prevFrameRef.current = new Uint8ClampedArray(pixels)
+
+      // ── 2. Head tilt (posture proxy) ─────────────────────────────────────
+      try {
+        await loadFaceApiModels()
+        if (!faceApiReady || cancelled) return
+        const result = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.3 }))
+          .withFaceLandmarks()
+        if (!result || cancelled) return
+
+        const jaw = result.landmarks.getJawOutline()
+        const leftJaw  = jaw[0]
+        const rightJaw = jaw[jaw.length - 1]
+        const tiltDeg  = Math.abs(Math.atan2(rightJaw.y - leftJaw.y, rightJaw.x - leftJaw.x) * 180 / Math.PI)
+        const goodPosture = tiltDeg < 18
+        const sRef = behavioralRef.current
+        sRef.sideChecks  = (sRef.sideChecks  || 0) + 1
+        sRef.sideUpright = (sRef.sideUpright || 0) + (goodPosture ? 1 : 0)
+        if (!cancelled) setLivePosture((prev) => ({ ...prev, upright: goodPosture }))
+      } catch (_) {}
+    }
+
+    const id = setInterval(run, intervalMs)
+    run()
+    return () => { cancelled = true; clearInterval(id) }
+  }, [active, sideVideoRef, behavioralRef])
+
+  return livePosture
+}
+
 // ─── Face analysis chip ──────────────────────────────────────────────────────
 function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : '' }
 
 function FaceInsightChip({ label, value, ok, neutral = false }) {
+  const rgb = neutral ? '148,163,184' : ok ? '16,185,129' : '245,158,11'
   const color = neutral ? '#94a3b8' : ok ? '#34d399' : '#fbbf24'
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '3px 8px', borderRadius: 6,
-      background: `rgba(${neutral ? '148,163,184' : ok ? '16,185,129' : '245,158,11'},0.08)`,
-      border: `1px solid rgba(${neutral ? '148,163,184' : ok ? '16,185,129' : '245,158,11'},0.2)`,
-      fontSize: 10, fontWeight: 600, fontFamily: 'Inter, system-ui',
+      padding: '3px 9px', borderRadius: 6,
+      background: `rgba(0,0,0,0.55)`,
+      border: `1px solid rgba(${rgb},0.35)`,
+      backdropFilter: 'blur(4px)',
+      fontSize: 11, fontWeight: 600, fontFamily: 'Inter, system-ui',
+      whiteSpace: 'nowrap',
     }}>
-      <span style={{ color: '#64748b', fontWeight: 500 }}>{label}:</span>
+      <span style={{ color: '#64748b', fontWeight: 500, fontSize: 10 }}>{label}:</span>
       <span style={{ color }}>{value}</span>
     </div>
   )
 }
 
 // ─── Live screen ────────────────────────────────────────────────────────────
-function PipFeed({ stream, label }) {
-  const ref = useRef(null)
+// PipFeed — fills its parent container (parent controls size via CSS)
+const PipFeed = React.forwardRef(function PipFeed({ stream, label }, forwardedRef) {
+  const internalRef = useRef(null)
+  const ref = forwardedRef || internalRef
   useEffect(() => {
     if (ref.current && stream) ref.current.srcObject = stream
-  }, [stream])
-  if (!stream) return null
-  return (
-    <div style={{ position: 'relative', flexShrink: 0 }}>
-      <video
-        ref={ref} autoPlay muted playsInline
-        style={{ width: 96, height: 70, borderRadius: 8, objectFit: 'cover', background: '#060612', display: 'block', border: '1px solid rgba(255,255,255,0.1)' }}
-      />
-      <span style={{
-        position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)',
-        fontSize: 9, color: '#94a3b8', whiteSpace: 'nowrap',
-        background: 'rgba(0,0,0,0.65)', padding: '1px 6px', borderRadius: 4, fontWeight: 600,
-      }}>{label}</span>
+  }, [stream, ref])
+  if (!stream) return (
+    <div style={{
+      width: '100%', aspectRatio: '16/9',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(255,255,255,0.02)',
+      color: '#334155', fontSize: 12,
+    }}>
+      No signal
     </div>
   )
-}
+  return (
+    <video
+      ref={ref} autoPlay muted playsInline
+      style={{
+        width: '100%', aspectRatio: '16/9',
+        objectFit: 'cover', display: 'block',
+        background: '#060612',
+      }}
+    />
+  )
+})
 
 function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
   // initialData shape depends on entry point:
@@ -1041,12 +1417,87 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
   const scrollerRef = useRef(null)
   const textareaRef = useRef(null)
 
-  // ── Webcam ref (declared early so face analysis hook can reference it) ──────
-  const videoRef = useRef(null)
-  const streamRef = useRef(null)
+  // ── Webcam refs (declared early so face analysis hooks can reference them) ──
+  const videoRef   = useRef(null)   // front camera
+  const topVideoRef  = useRef(null) // top camera (anti-cheat)
+  const sideVideoRef = useRef(null) // side/wide camera (posture)
+  const streamRef  = useRef(null)
+
+  // ── Behavioral stats accumulator ─────────────────────────────────────────
+  // Grows throughout the interview; flushed to backend when session ends.
+  const behavioralRef = useRef({
+    startTime: Date.now(),
+    totalChecks: 0,
+    gazeOnCount: 0,
+    expressionHistory: [],
+    uprightCount: 0,
+    topCamChecks: 0,
+    topCamAlerts: 0,  // look-down detections (possible cheating)
+    sideChecks: 0,
+    sideUpright: 0,
+    cameraConfig: {
+      front: !!cameraStreams.front,
+      top:   !!cameraStreams.top,
+      side:  !!cameraStreams.side,
+    },
+  })
+
+  // Helper: build the final stats object from the accumulator
+  const buildBehavioralStats = useCallback(() => {
+    const s = behavioralRef.current
+    const total = Math.max(s.totalChecks, 1)
+    // Expression distribution
+    const expCounts = {}
+    s.expressionHistory.forEach((e) => { expCounts[e] = (expCounts[e] || 0) + 1 })
+    const exprLen = s.expressionHistory.length || 1
+    const expressions = {}
+    Object.entries(expCounts).forEach(([k, v]) => { expressions[k] = parseFloat((v / exprLen).toFixed(3)) })
+    // Top-cam anti-cheat score
+    const topTotal = s.topCamChecks || 0
+    const topCamScore = topTotal > 0 ? Math.round(((topTotal - (s.topCamAlerts || 0)) / topTotal) * 100) : null
+    // Side-cam posture score
+    const sideTotal = s.sideChecks || 0
+    const postureScore = sideTotal > 0 ? Math.round((s.sideUpright / sideTotal) * 100) : null
+    // Side-cam motion scores (hands + legs)
+    const motionChecks = s.sideMotionChecks || 0
+    const handMotionPct  = motionChecks > 0 ? Math.round(((s.handMotionCount  || 0) / motionChecks) * 100) : null
+    const legMotionPct   = motionChecks > 0 ? Math.round(((s.legMotionCount   || 0) / motionChecks) * 100) : null
+    const bodyMotionPct  = motionChecks > 0 ? Math.round(((s.bodyMotionCount  || 0) / motionChecks) * 100) : null
+    return {
+      eye_contact_pct:  Math.round((s.gazeOnCount / total) * 100),
+      gaze_score:       Math.round((s.gazeOnCount / total) * 100),
+      expressions,
+      upright_head_pct: Math.round((s.uprightCount / total) * 100),
+      posture_score:    postureScore,
+      top_cam_score:    topCamScore,
+      top_cam_alerts:   s.topCamAlerts || 0,
+      phone_alerts:     s.topCamPhoneAlerts || 0,
+      lean_alerts:      s.topCamLeanAlerts  || 0,
+      hand_motion_pct:  handMotionPct,
+      leg_motion_pct:   legMotionPct,
+      body_motion_pct:  bodyMotionPct,
+      total_checks:     s.totalChecks,
+      camera_config:    s.cameraConfig,
+      duration_seconds: Math.round((Date.now() - s.startTime) / 1000),
+    }
+  }, [])
 
   // ── Live face analysis ─────────────────────────────────────────────────────
   const faceAnalysis = useLiveFaceAnalysis(videoRef, !endReason)
+
+  // Accumulate each face-analysis tick into behavioralRef running totals
+  useEffect(() => {
+    if (!faceAnalysis || endReason) return
+    const s = behavioralRef.current
+    s.totalChecks++
+    if (faceAnalysis.gazeDirect)  s.gazeOnCount++
+    if (faceAnalysis.uprightHead) s.uprightCount++
+    if (faceAnalysis.expr) s.expressionHistory.push(faceAnalysis.expr)
+  }, [faceAnalysis, endReason])
+
+  // Top and side camera monitors — capture live state for display chips
+  const topCamAlert   = useTopCameraMonitor(topVideoRef,  behavioralRef, !!cameraStreams.top  && !endReason)
+  const sidePosture   = useSideCameraPosture(sideVideoRef, behavioralRef, !!cameraStreams.side && !endReason)
 
   // ── TTS / Avatar ──────────────────────────────────────────────────────────
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -1107,11 +1558,11 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
 
   // ── Webcam ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    // Prefer the stream from CameraSetupScreen (already open, no extra permission needed)
+    // Prefer the stream from CameraSetupDialog (already open, no extra permission needed)
     if (cameraStreams.front) {
       streamRef.current = cameraStreams.front
       if (videoRef.current) videoRef.current.srcObject = cameraStreams.front
-      return  // nothing to clean up — CameraSetupScreen manages lifecycle
+      return  // nothing to clean up — CameraSetupDialog manages lifecycle
     }
 
     // Fallback: open the default camera ourselves
@@ -1128,7 +1579,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
     })()
     return () => {
       cancelled = true
-      // Only stop if we opened it ourselves (not the one from CameraSetupScreen)
+      // Only stop if we opened it ourselves (not the stream from CameraSetupDialog)
       if (!cameraStreams.front) streamRef.current?.getTracks().forEach((t) => t.stop())
     }
   }, [cameraStreams.front])
@@ -1221,14 +1672,18 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
     setAnswerText('')
 
     try {
-      const result = await adaptiveInterviewApi.answer(sessionId, trimmed)
+      // Always send accumulated behavioral stats — backend stores them only when
+      // end_reason is present, so there's no cost to sending every time.
+      const behavioral = buildBehavioralStats()
+      const result = await adaptiveInterviewApi.answer(sessionId, trimmed, behavioral)
       setProgress(result.progress)
       setLastJudgment({ judgment: result.judgment, action: result.next_action })
 
       if (result.end_reason) {
         setEndReason(result.end_reason)
         setCurrentQ(null)
-        onEnded?.(result)
+        // Attach the front-end behavioral snapshot so the scorecard can render it immediately
+        onEnded?.({ ...result, _behavioral: behavioral })
       } else if (result.next_question) {
         setCurrentQ(result.next_question)
         setTranscript((prev) => [...prev, {
@@ -1249,7 +1704,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
     } finally {
       setSubmitting(false)
     }
-  }, [answerText, sessionId, submitting, onEnded])
+  }, [answerText, sessionId, submitting, onEnded, buildBehavioralStats])
 
   const handleCaptureResult = useCallback((result) => {
     // The vision capture endpoint returns the same shape as /answer.
@@ -1269,7 +1724,7 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
     if (result.end_reason) {
       setEndReason(result.end_reason)
       setCurrentQ(null)
-      onEnded?.(result)
+      onEnded?.({ ...result, _behavioral: buildBehavioralStats() })
     } else if (result.next_question) {
       setCurrentQ(result.next_question)
       setTranscript((prev) => [...prev, {
@@ -1281,21 +1736,23 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         requires_diagram: result.next_question.requires_diagram,
       }])
     }
-  }, [onEnded])
+  }, [onEnded, buildBehavioralStats])
 
   const handleEndManually = useCallback(async () => {
     if (!confirm('End the interview now? You\'ll get a partial report.')) return
     try {
-      const result = await adaptiveInterviewApi.end(sessionId)
+      const behavioral = buildBehavioralStats()
+      const result = await adaptiveInterviewApi.end(sessionId, behavioral)
       setEndReason(result.end_reason)
       setProgress(result.progress)
       setCurrentQ(null)
-      onEnded?.(result)
+      // Attach behavioral snapshot so the scorecard can render soft-skills immediately
+      onEnded?.({ ...result, _behavioral: behavioral })
     } catch (err) {
       const detail = err.response?.data?.detail || 'Could not end session.'
       toast.error(detail)
     }
-  }, [sessionId, onEnded])
+  }, [sessionId, onEnded, buildBehavioralStats])
 
   const onKeyDown = (e) => {
     // Cmd/Ctrl+Enter to submit.
@@ -1305,126 +1762,292 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
     }
   }
 
+  // ── Alert label helpers ────────────────────────────────────────────────────
+  const topAlertLabel = topCamAlert === 'screen'    ? '⚠ Screen detected'
+                      : topCamAlert === 'lean'      ? '⚠ Leaning over desk'
+                      : topCamAlert === 'gaze_down' ? '⚠ Looking at desk'
+                      : '✓ Clear'
+  const topAlertOk = topCamAlert === null
+
   return (
+    // Full-viewport container — DarkLayout sets padding:0 when sidebarCollapsed
     <div style={{
-      display: 'flex', gap: 20, alignItems: 'flex-start',
-      maxWidth: 1280, margin: '0 auto', padding: '20px',
+      display: 'flex', gap: 0, height: '100vh',
     }}>
-      {/* Main column */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      {/* ── Main interview area ─────────────────────────────────────────────── */}
+      <div style={{
+        flex: 1, minWidth: 0,
+        display: 'flex', flexDirection: 'column',
+        height: '100%', overflow: 'hidden',
+        padding: '16px 16px 16px 20px',
+      }}>
 
-        {/* ── Video-conference panel ──────────────────────────────────────── */}
+        {/* ═══ TOP: Zoom-style video tiles ═══════════════════════════════════ */}
         {!endReason && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14,
-            background: 'rgba(5,5,15,0.75)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: 16, padding: '14px 20px',
-            backdropFilter: 'blur(12px)',
-          }}>
-            {/* AI Avatar block */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 100 }}>
-              <HumanAvatar isSpeaking={isSpeaking} size={110} />
-              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: 0.5 }}>AI Interviewer</span>
-              <AnimatePresence>
-                {isSpeaking && (
-                  <motion.span
-                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                    style={{ fontSize: 10, color: '#a78bfa', fontStyle: 'italic' }}
-                  >
-                    Speaking…
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </div>
+          <div style={{ marginBottom: 12, flexShrink: 0 }}>
 
-            {/* Current question summary strip */}
-            {currentQ && (
+            {/* Primary tiles row — Avatar + Front camera equal-width */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 12,
+              marginBottom: 10,
+            }}>
+              {/* ── AI Avatar tile ── */}
               <div style={{
-                flex: 1, padding: '10px 14px', borderRadius: 12,
-                background: 'rgba(99,102,241,0.06)',
-                border: '1px solid rgba(99,102,241,0.14)',
-                fontSize: 13, color: '#cbd5e1', lineHeight: 1.5,
+                position: 'relative',
+                background: 'linear-gradient(160deg, #0d0d1f 0%, #0a0a18 100%)',
+                border: '1px solid rgba(99,102,241,0.2)',
+                borderRadius: 16,
+                aspectRatio: '16/9',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
               }}>
-                <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4, fontWeight: 700 }}>
-                  {currentQ.topic && <span>{currentQ.topic}</span>}
-                  {currentQ.difficulty && <span style={{ color: '#a78bfa' }}> · {currentQ.difficulty}</span>}
+                {/* Subtle glow behind avatar */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'radial-gradient(ellipse at 50% 60%, rgba(99,102,241,0.12) 0%, transparent 65%)',
+                  pointerEvents: 'none',
+                }} />
+                <HumanAvatar isSpeaking={isSpeaking} size={160} />
+                <AnimatePresence>
+                  {isSpeaking && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                      style={{
+                        position: 'absolute', bottom: 36, left: '50%', transform: 'translateX(-50%)',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '4px 12px', borderRadius: 99,
+                        background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.3)',
+                        fontSize: 11, color: '#a5b4fc', fontWeight: 600, whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <motion.span
+                        animate={{ scale: [1, 1.4, 1] }}
+                        transition={{ duration: 0.7, repeat: Infinity }}
+                        style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#6366f1' }}
+                      />
+                      Speaking…
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {/* Name badge */}
+                <div style={{
+                  position: 'absolute', bottom: 10, left: 12,
+                  padding: '3px 10px', borderRadius: 6,
+                  background: 'rgba(0,0,0,0.65)', fontSize: 11,
+                  color: '#94a3b8', fontWeight: 600, letterSpacing: 0.4,
+                }}>
+                  AI Interviewer
                 </div>
-                <div style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {currentQ.text}
-                </div>
+                {/* Question topic chip top-right */}
+                {currentQ && (
+                  <div style={{
+                    position: 'absolute', top: 10, right: 12,
+                    padding: '3px 10px', borderRadius: 6,
+                    background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(99,102,241,0.25)',
+                    fontSize: 10, color: '#a5b4fc', fontWeight: 700,
+                    textTransform: 'uppercase', letterSpacing: 0.6, maxWidth: 160,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {currentQ.topic}
+                    {currentQ.difficulty && ` · ${currentQ.difficulty}`}
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* User webcam — main (larger) feed */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, alignItems: 'center' }}>
-              <div style={{ position: 'relative' }}>
+              {/* ── User front camera tile ── */}
+              <div style={{
+                position: 'relative',
+                background: '#080812',
+                border: `2px solid ${faceAnalysis?.gazeDirect ? 'rgba(16,185,129,0.45)' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 16,
+                aspectRatio: '16/9',
+                overflow: 'hidden',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+                transition: 'border-color 0.5s',
+              }}>
                 <video
                   ref={videoRef}
                   autoPlay muted playsInline
                   style={{
-                    width: 220, height: 165, borderRadius: 12, objectFit: 'cover',
-                    background: '#080812',
-                    border: '2px solid rgba(16,185,129,0.35)',
-                    display: 'block',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                    width: '100%', height: '100%',
+                    objectFit: 'cover', display: 'block',
                   }}
                 />
-                <span style={{
-                  position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
-                  fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap',
-                  background: 'rgba(0,0,0,0.7)', padding: '2px 8px', borderRadius: 4,
-                  fontWeight: 600, letterSpacing: 0.5,
-                }}>You · Front</span>
-              </div>
-              {/* Optional PiP feeds for top / side cameras */}
-              {(cameraStreams.top || cameraStreams.side) && (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {cameraStreams.top  && <PipFeed stream={cameraStreams.top}  label="Top" />}
-                  {cameraStreams.side && <PipFeed stream={cameraStreams.side} label="Side" />}
-                </div>
-              )}
-              {/* Live face analysis chip strip */}
-              {faceAnalysis && (
+                {/* Name badge */}
                 <div style={{
-                  display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center',
-                  maxWidth: 220,
+                  position: 'absolute', bottom: 10, left: 12,
+                  padding: '3px 10px', borderRadius: 6,
+                  background: 'rgba(0,0,0,0.7)', fontSize: 11,
+                  color: '#94a3b8', fontWeight: 600, letterSpacing: 0.4,
                 }}>
-                  <FaceInsightChip
-                    label="Eye contact"
-                    value={faceAnalysis.gazeDirect ? 'Good' : 'Look at cam'}
-                    ok={faceAnalysis.gazeDirect}
-                  />
-                  <FaceInsightChip
-                    label="Posture"
-                    value={faceAnalysis.uprightHead ? 'Upright' : 'Tilt detected'}
-                    ok={faceAnalysis.uprightHead}
-                  />
-                  <FaceInsightChip
-                    label={capitalize(faceAnalysis.expr)}
-                    value={`${faceAnalysis.confidence}%`}
-                    ok={faceAnalysis.expr === 'neutral' || faceAnalysis.expr === 'happy'}
-                    neutral={faceAnalysis.expr === 'neutral'}
-                  />
+                  You · Front
                 </div>
-              )}
+                {/* Live face-analysis chips overlay (bottom strip) */}
+                {faceAnalysis && (
+                  <div style={{
+                    position: 'absolute', bottom: 10, right: 10,
+                    display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end',
+                    maxWidth: '60%',
+                  }}>
+                    <FaceInsightChip
+                      label="Eye contact"
+                      value={faceAnalysis.gazeDirect ? 'Good' : 'Look at cam'}
+                      ok={faceAnalysis.gazeDirect}
+                    />
+                    <FaceInsightChip
+                      label="Head"
+                      value={faceAnalysis.uprightHead ? 'Upright' : 'Tilted'}
+                      ok={faceAnalysis.uprightHead}
+                    />
+                    <FaceInsightChip
+                      label={capitalize(faceAnalysis.expr)}
+                      value={`${faceAnalysis.confidence}%`}
+                      ok={faceAnalysis.expr === 'neutral' || faceAnalysis.expr === 'happy'}
+                      neutral={faceAnalysis.expr === 'neutral'}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* ── Secondary camera row: Top (anti-cheat) + Side (posture/motion) ── */}
+            {(cameraStreams.top || cameraStreams.side) && (
+              <div style={{
+                display: 'flex', gap: 12,
+                flexWrap: 'wrap',
+              }}>
+                {/* Top camera tile */}
+                {cameraStreams.top && (
+                  <div style={{
+                    flex: '1 1 200px', minWidth: 180, maxWidth: 260,
+                    background: '#060610',
+                    border: `1px solid ${topAlertOk ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.4)'}`,
+                    borderRadius: 12, overflow: 'hidden', position: 'relative',
+                    transition: 'border-color 0.4s',
+                  }}>
+                    <PipFeed
+                      ref={topVideoRef}
+                      stream={cameraStreams.top}
+                      label={null}
+                    />
+                    {/* Status bar overlay */}
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0,
+                      padding: '6px 10px',
+                      background: 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, transparent 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    }}>
+                      <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                        📷 Top · Anti-cheat
+                      </span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
+                        color: topAlertOk ? '#34d399' : '#f87171',
+                        background: topAlertOk ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.15)',
+                        padding: '1px 6px', borderRadius: 4,
+                      }}>
+                        {topAlertLabel}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Side camera tile */}
+                {cameraStreams.side && (
+                  <div style={{
+                    flex: '1 1 200px', minWidth: 180, maxWidth: 260,
+                    background: '#060610',
+                    border: '1px solid rgba(168,85,247,0.2)',
+                    borderRadius: 12, overflow: 'hidden', position: 'relative',
+                  }}>
+                    <PipFeed
+                      ref={sideVideoRef}
+                      stream={cameraStreams.side}
+                      label={null}
+                    />
+                    {/* Multi-line analysis overlay */}
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0,
+                      padding: '6px 10px',
+                      background: 'linear-gradient(0deg, rgba(0,0,0,0.78) 0%, transparent 100%)',
+                    }}>
+                      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>
+                        👤 Side · Body Language
+                      </div>
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                        {sidePosture.upright !== null && (
+                          <FaceInsightChip
+                            label="Posture"
+                            value={sidePosture.upright ? 'Upright' : 'Slouching'}
+                            ok={sidePosture.upright}
+                          />
+                        )}
+                        {sidePosture.hands !== 'unknown' && (
+                          <FaceInsightChip
+                            label="Hands"
+                            value={sidePosture.hands === 'moving' ? 'Fidgeting' : 'Still'}
+                            ok={sidePosture.hands !== 'moving'}
+                          />
+                        )}
+                        {sidePosture.legs !== 'unknown' && (
+                          <FaceInsightChip
+                            label="Legs"
+                            value={sidePosture.legs === 'shaking' ? 'Shaking' : 'Still'}
+                            ok={sidePosture.legs !== 'shaking'}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Remaining space — question text summary */}
+                <div style={{
+                  flex: '2 1 280px', minWidth: 200,
+                  background: 'rgba(99,102,241,0.04)',
+                  border: '1px solid rgba(99,102,241,0.12)',
+                  borderRadius: 12, padding: '12px 14px',
+                  display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                }}>
+                  {currentQ ? (
+                    <>
+                      <div style={{ fontSize: 10, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
+                        Current question
+                      </div>
+                      <div style={{
+                        fontSize: 13, color: '#cbd5e1', lineHeight: 1.55,
+                        display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                      }}>
+                        {currentQ.text}
+                      </div>
+                    </>
+                  ) : (
+                    <span style={{ color: '#475569', fontSize: 13 }}>—</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Transcript */}
+        {/* ═══ MIDDLE: Transcript ════════════════════════════════════════════ */}
         <div
           ref={scrollerRef}
           style={{
-            background: 'rgba(15,15,24,0.4)',
+            flex: 1, minHeight: 0,
+            background: 'rgba(10,10,18,0.5)',
             border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: 16, padding: 20,
-            minHeight: 360, maxHeight: 'calc(100vh - 280px)',
-            overflowY: 'auto', marginBottom: 14,
+            borderRadius: 14, padding: '14px 16px',
+            overflowY: 'auto',
+            marginBottom: 10,
           }}
         >
           {transcript.length === 0 ? (
-            <div style={{ color: '#64748b', textAlign: 'center', padding: 40, fontSize: 14 }}>
+            <div style={{ color: '#64748b', textAlign: 'center', padding: 32, fontSize: 13 }}>
               Loading session…
             </div>
           ) : (
@@ -1437,10 +2060,10 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
             {submitting && (
               <motion.div
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#94a3b8', fontSize: 13, padding: '8px 4px' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 12, padding: '8px 4px' }}
               >
-                <Loader2 size={14} className="animate-spin" />
-                Interviewer is judging your answer + drafting the next question…
+                <Loader2 size={13} className="animate-spin" />
+                Judging your answer + drafting next question…
               </motion.div>
             )}
           </AnimatePresence>
@@ -1457,14 +2080,15 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
           </AnimatePresence>
         </div>
 
-        {/* Answer box */}
+        {/* ═══ BOTTOM: Answer input ══════════════════════════════════════════ */}
         {endReason ? (
           <EndBanner endReason={endReason} sessionId={sessionId} />
         ) : (
           <div style={{
-            background: 'rgba(15,15,24,0.55)',
+            flexShrink: 0,
+            background: 'rgba(12,12,22,0.6)',
             border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 16, padding: 16,
+            borderRadius: 14, padding: '12px 14px',
           }}>
             <textarea
               ref={textareaRef}
@@ -1472,48 +2096,45 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
               onChange={(e) => setAnswerText(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder="Type your answer. Be specific — concrete examples beat abstract definitions. Cmd/Ctrl+Enter to submit."
-              rows={4}
+              rows={3}
               disabled={submitting}
               style={{
                 width: '100%', boxSizing: 'border-box',
-                padding: '12px 14px', borderRadius: 12,
+                padding: '10px 12px', borderRadius: 10,
                 background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.07)',
                 color: '#f1f5f9', fontSize: 14, fontFamily: 'Inter, system-ui',
-                resize: 'vertical', lineHeight: 1.6,
+                resize: 'none', lineHeight: 1.6,
               }}
             />
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap',
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
               <button
                 onClick={() => setCaptureOpen(true)}
                 disabled={submitting}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '9px 14px', borderRadius: 10,
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '8px 12px', borderRadius: 9,
                   background: currentQ?.requires_diagram ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.04)',
                   border: '1px solid ' + (currentQ?.requires_diagram ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.08)'),
-                  color: '#f1f5f9', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  color: '#f1f5f9', fontSize: 12, fontWeight: 600, cursor: 'pointer',
                   fontFamily: 'Inter, system-ui',
                 }}
               >
-                <ImagePlus size={14} />
-                {currentQ?.requires_diagram ? 'Show your work →' : 'Diagram / whiteboard'}
+                <ImagePlus size={13} />
+                {currentQ?.requires_diagram ? 'Show work →' : 'Diagram'}
               </button>
 
-              {/* Voice input button */}
               <button
                 onClick={toggleVoice}
                 disabled={submitting}
                 title={isListening ? 'Stop listening' : 'Speak your answer'}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '9px 14px', borderRadius: 10, cursor: submitting ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '8px 12px', borderRadius: 9, cursor: submitting ? 'not-allowed' : 'pointer',
                   background: isListening ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.04)',
                   border: '1px solid ' + (isListening ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)'),
                   color: isListening ? '#fca5a5' : '#f1f5f9',
-                  fontSize: 13, fontWeight: 600, fontFamily: 'Inter, system-ui',
+                  fontSize: 12, fontWeight: 600, fontFamily: 'Inter, system-ui',
                   transition: 'all 0.2s',
                 }}
               >
@@ -1523,33 +2144,31 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                     transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
                     style={{ display: 'inline-flex' }}
                   >
-                    <Mic size={14} />
+                    <Mic size={13} />
                   </motion.div>
-                ) : (
-                  <Mic size={14} />
-                )}
+                ) : <Mic size={13} />}
                 {isListening ? 'Listening…' : 'Voice'}
               </button>
 
-              <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: 12 }}>
-                {answerText.trim().length} chars
+              <span style={{ marginLeft: 'auto', color: '#475569', fontSize: 11 }}>
+                {answerText.trim().length} chars · Ctrl+Enter to send
               </span>
 
               <button
                 onClick={handleSubmit}
                 disabled={submitting || !answerText.trim()}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                  padding: '10px 20px', borderRadius: 10,
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  padding: '9px 20px', borderRadius: 10,
                   background: 'linear-gradient(135deg,#6366f1,#a855f7)',
                   color: '#fff', border: 'none',
-                  fontSize: 14, fontWeight: 700, fontFamily: 'Inter, system-ui',
+                  fontSize: 13, fontWeight: 700, fontFamily: 'Inter, system-ui',
                   cursor: submitting || !answerText.trim() ? 'not-allowed' : 'pointer',
                   opacity: submitting || !answerText.trim() ? 0.6 : 1,
-                  boxShadow: '0 8px 20px -8px rgba(99,102,241,0.5)',
+                  boxShadow: '0 6px 18px -6px rgba(99,102,241,0.55)',
                 }}
               >
-                {submitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                {submitting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                 {submitting ? 'Sending…' : 'Send answer'}
               </button>
             </div>
@@ -1557,12 +2176,15 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         )}
       </div>
 
-      <ProgressSidebar
-        progress={progress}
-        mode={mode}
-        endReason={endReason}
-        onEnd={handleEndManually}
-      />
+      {/* ── Right: Progress sidebar (slimmer in interview mode) ────────────── */}
+      <div style={{ flexShrink: 0, width: 220, padding: '16px 16px 16px 0', overflow: 'hidden' }}>
+        <ProgressSidebar
+          progress={progress}
+          mode={mode}
+          endReason={endReason}
+          onEnd={handleEndManually}
+        />
+      </div>
 
       <CaptureModal
         open={captureOpen}
@@ -1595,10 +2217,67 @@ function EndBanner({ endReason, sessionId }) {
 }
 
 // ─── End-of-interview scorecard (rendered below the live screen) ────────────
-function Scorecard({ progress, endReason }) {
+// ── Helpers for soft-skill score colour ─────────────────────────────────────
+function scoreColor(pct) {
+  if (pct == null) return '#475569'
+  return pct >= 75 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444'
+}
+function scoreLabel(pct, hi = 'Strong', mid = 'Average', lo = 'Needs work') {
+  if (pct == null) return 'No data'
+  return pct >= 75 ? hi : pct >= 50 ? mid : lo
+}
+
+// A horizontal "meter bar" used inside SoftStatCard
+function MiniMeter({ pct, color }) {
+  return (
+    <div style={{ height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.07)', overflow: 'hidden', marginTop: 8 }}>
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: `${pct ?? 0}%` }}
+        transition={{ duration: 0.8, ease: 'easeOut' }}
+        style={{ height: '100%', background: color, borderRadius: 4 }}
+      />
+    </div>
+  )
+}
+
+// Single soft-skill card (icon + label + value + bar)
+function SoftStatCard({ icon: Icon, label, value, sub, pct, color }) {
+  const c = color || scoreColor(pct)
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      style={{
+        background: 'rgba(15,15,24,0.55)',
+        border: `1px solid ${c}28`,
+        borderRadius: 14, padding: '14px 16px',
+        display: 'flex', flexDirection: 'column', gap: 4,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 8,
+          background: `${c}18`, display: 'grid', placeItems: 'center', flexShrink: 0,
+        }}>
+          <Icon size={14} color={c} />
+        </div>
+        <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
+          {label}
+        </span>
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: c, fontFamily: "'Space Grotesk', sans-serif", lineHeight: 1 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: '#64748b' }}>{sub}</div>
+      {pct != null && <MiniMeter pct={pct} color={c} />}
+    </motion.div>
+  )
+}
+
+function Scorecard({ progress, endReason, behavioral = {}, report = null, sessionId }) {
   if (!progress) return null
 
-  // Aggregate: avg of per-topic avg scores (only topics that have scores).
+  // ── Technical aggregate ──────────────────────────────────────────────────
   const scored = progress.per_topic.filter((t) => t.avg_score != null)
   const overall = scored.length
     ? Math.round(scored.reduce((s, t) => s + t.avg_score, 0) / scored.length)
@@ -1606,14 +2285,60 @@ function Scorecard({ progress, endReason }) {
 
   const verdict = overall == null
     ? { label: 'Insufficient data', color: '#94a3b8' }
-    : overall >= 80 ? { label: 'Strong performance', color: '#10b981' }
+    : overall >= 80 ? { label: 'Strong performance',        color: '#10b981' }
     : overall >= 60 ? { label: 'Hireable with growth areas', color: '#a78bfa' }
-    : overall >= 40 ? { label: 'Needs more practice', color: '#f59e0b' }
-                    : { label: 'Significant gaps', color: '#ef4444' }
+    : overall >= 40 ? { label: 'Needs more practice',        color: '#f59e0b' }
+                    : { label: 'Significant gaps',           color: '#ef4444' }
+
+  // ── Soft-skill metrics from behavioral snapshot ──────────────────────────
+  const eyeContact   = behavioral.eye_contact_pct ?? null
+  const uprightHead  = behavioral.upright_head_pct ?? null
+  const postureScore = behavioral.posture_score ?? uprightHead   // side cam > front cam proxy
+
+  // Confidence = calm (neutral + happy) ratio from expression history
+  const expMap = behavioral.expressions || {}
+  const expTotal = Object.values(expMap).reduce((s, v) => s + Number(v), 0)
+  const confidenceScore = expTotal > 0
+    ? Math.round(((Number(expMap.neutral || 0) + Number(expMap.happy || 0)) / expTotal) * 100)
+    : null
+  // Composure = inverse of fearful + angry + sad
+  const nervousRatio = expTotal > 0
+    ? (Number(expMap.fearful || 0) + Number(expMap.angry || 0) + Number(expMap.sad || 0)) / expTotal
+    : null
+  const composureScore = nervousRatio !== null ? Math.round((1 - nervousRatio) * 100) : null
+
+  // Integrity score from top cam
+  const integrityScore = behavioral.top_cam_score ?? null
+  const phoneAlerts    = behavioral.phone_alerts ?? 0
+  const leanAlerts     = behavioral.lean_alerts  ?? 0
+
+  // Body movement from side cam
+  const handMotion = behavioral.hand_motion_pct ?? null
+  const legMotion  = behavioral.leg_motion_pct  ?? null
+
+  // Verbal metrics from Gemini report (if available already)
+  const comm       = report?.communication || {}
+  const language   = comm.language || {}
+  const wpm        = comm.speaking_pace_wpm ?? null
+  const fillerTotal= comm.filler_word_total ?? null
+  const vocabScore = language.vocabulary_richness != null ? Math.round(language.vocabulary_richness) : null
+  const grammarScore = language.grammar_score != null ? Math.round(language.grammar_score) : null
+  const coherenceScore = language.coherence_score != null ? Math.round(language.coherence_score) : null
+
+  const hasSoftData  = eyeContact != null || postureScore != null || confidenceScore != null
+  const hasVerbalData = vocabScore != null || wpm != null || fillerTotal != null
+  const hasMotionData = handMotion != null || legMotion != null
+
+  // Dominant expression label
+  let dominantExpr = '—'
+  if (expTotal > 0) {
+    const [top] = Object.entries(expMap).sort(([, a], [, b]) => b - a)
+    if (top) dominantExpr = top[0].charAt(0).toUpperCase() + top[0].slice(1)
+  }
 
   return (
     <div style={{
-      maxWidth: 980, margin: '24px auto 60px', padding: '0 20px',
+      maxWidth: 1020, margin: '24px auto 60px', padding: '0 20px',
       fontFamily: 'Inter, system-ui',
     }}>
       <h2 style={{
@@ -1624,56 +2349,222 @@ function Scorecard({ progress, endReason }) {
         Scorecard
       </h2>
 
+      {/* ── Section 1: Technical summary ── */}
+      <div style={{ marginBottom: 6 }}>
+        <SectionLabel icon={Brain} label="Technical Performance" />
+      </div>
       <div style={{
-        display: 'grid', gap: 14,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        marginBottom: 20,
+        display: 'grid', gap: 12,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        marginBottom: 24,
       }}>
-        <StatCard
-          label="Overall"
-          value={overall != null ? overall : '—'}
-          suffix={overall != null ? '/ 100' : ''}
-          sub={verdict.label}
-          color={verdict.color}
-        />
-        <StatCard
-          label="Time"
-          value={progress.elapsed_minutes}
-          suffix=" min"
-          sub={`of ${progress.target_duration_minutes} target`}
-        />
-        <StatCard
-          label="Coverage"
-          value={`${progress.topics_covered}/${progress.topics_total}`}
-          sub="topics touched"
-        />
-        <StatCard
-          label="Questions"
-          value={progress.questions_asked}
-          sub="asked in total"
-        />
+        <StatCard label="Overall" value={overall ?? '—'} suffix={overall != null ? '/ 100' : ''} sub={verdict.label} color={verdict.color} />
+        <StatCard label="Time"     value={progress.elapsed_minutes} suffix=" min" sub={`of ${progress.target_duration_minutes} target`} />
+        <StatCard label="Coverage" value={`${progress.topics_covered}/${progress.topics_total}`} sub="topics touched" />
+        <StatCard label="Questions" value={progress.questions_asked} sub="asked in total" />
       </div>
 
-      <h3 style={{ fontSize: 15, fontWeight: 700, color: '#cbd5e1', marginBottom: 10 }}>
-        Per-topic breakdown
-      </h3>
+      {/* ── Section 2: Presence & Body Language ── */}
+      {hasSoftData && (
+        <>
+          <div style={{ marginBottom: 6 }}>
+            <SectionLabel icon={UserCheck} label="Presence & Body Language" />
+          </div>
+          <div style={{
+            display: 'grid', gap: 12,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))',
+            marginBottom: 24,
+          }}>
+            {eyeContact != null && (
+              <SoftStatCard
+                icon={Eye}
+                label="Eye Contact"
+                value={`${eyeContact}%`}
+                sub={scoreLabel(eyeContact, 'Locked in', 'Occasional drift', 'Avoid looking away')}
+                pct={eyeContact}
+              />
+            )}
+            {postureScore != null && (
+              <SoftStatCard
+                icon={Activity}
+                label="Posture"
+                value={`${postureScore}%`}
+                sub={scoreLabel(postureScore, 'Upright & confident', 'Mostly upright', 'Frequent slouching')}
+                pct={postureScore}
+              />
+            )}
+            {confidenceScore != null && (
+              <SoftStatCard
+                icon={Sparkles}
+                label="Confidence"
+                value={`${confidenceScore}%`}
+                sub={`Dominant: ${dominantExpr}`}
+                pct={confidenceScore}
+              />
+            )}
+            {composureScore != null && (
+              <SoftStatCard
+                icon={Shield}
+                label="Composure"
+                value={`${composureScore}%`}
+                sub={scoreLabel(composureScore, 'Calm throughout', 'Mild stress visible', 'Noticeable tension')}
+                pct={composureScore}
+              />
+            )}
+            {integrityScore != null && (
+              <SoftStatCard
+                icon={BadgeCheck}
+                label="Integrity"
+                value={`${integrityScore}%`}
+                sub={phoneAlerts + leanAlerts === 0 ? 'No suspicious activity' : `${phoneAlerts + leanAlerts} alert${phoneAlerts + leanAlerts !== 1 ? 's' : ''} flagged`}
+                pct={integrityScore}
+                color={integrityScore >= 90 ? '#10b981' : integrityScore >= 70 ? '#f59e0b' : '#ef4444'}
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Section 3: Body Movement ── */}
+      {hasMotionData && (
+        <>
+          <div style={{ marginBottom: 6 }}>
+            <SectionLabel icon={Activity} label="Movement & Composure" />
+          </div>
+          <div style={{
+            display: 'grid', gap: 12,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))',
+            marginBottom: 24,
+          }}>
+            {handMotion != null && (
+              <SoftStatCard
+                icon={Award}
+                label="Hand Stillness"
+                value={`${100 - handMotion}%`}
+                sub={handMotion > 40 ? 'Frequent fidgeting' : handMotion > 20 ? 'Some movement' : 'Hands steady'}
+                pct={100 - handMotion}
+              />
+            )}
+            {legMotion != null && (
+              <SoftStatCard
+                icon={TrendingUp}
+                label="Leg Stillness"
+                value={`${100 - legMotion}%`}
+                sub={legMotion > 40 ? 'Leg shaking detected' : legMotion > 20 ? 'Occasional movement' : 'Legs still'}
+                pct={100 - legMotion}
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Section 4: Verbal & Language ── */}
+      {hasVerbalData ? (
+        <>
+          <div style={{ marginBottom: 6 }}>
+            <SectionLabel icon={Mic} label="Verbal & Communication Skills" />
+          </div>
+          <div style={{
+            display: 'grid', gap: 12,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))',
+            marginBottom: 24,
+          }}>
+            {wpm != null && (
+              <SoftStatCard
+                icon={MessageSquare}
+                label="Speaking Pace"
+                value={`${wpm} wpm`}
+                sub={wpm > 180 ? 'A bit fast' : wpm > 120 ? 'Good pace' : 'Slow — pace up'}
+                pct={Math.min(100, Math.round((wpm / 160) * 100))}
+                color={wpm > 80 && wpm < 190 ? '#10b981' : '#f59e0b'}
+              />
+            )}
+            {fillerTotal != null && (
+              <SoftStatCard
+                icon={Mic}
+                label="Filler Words"
+                value={fillerTotal}
+                sub={fillerTotal <= 3 ? 'Crisp delivery' : fillerTotal <= 8 ? 'A few ums/likes' : 'Reduce filler words'}
+                pct={Math.max(0, 100 - fillerTotal * 8)}
+                color={fillerTotal <= 3 ? '#10b981' : fillerTotal <= 8 ? '#f59e0b' : '#ef4444'}
+              />
+            )}
+            {vocabScore != null && (
+              <SoftStatCard
+                icon={Brain}
+                label="Vocabulary"
+                value={`${vocabScore}/100`}
+                sub={scoreLabel(vocabScore, 'Rich vocabulary', 'Average range', 'Limited vocabulary')}
+                pct={vocabScore}
+              />
+            )}
+            {grammarScore != null && (
+              <SoftStatCard
+                icon={CheckCircle2}
+                label="Grammar"
+                value={`${grammarScore}/100`}
+                sub={scoreLabel(grammarScore, 'Fluent English', 'Minor errors', 'Grammar needs work')}
+                pct={grammarScore}
+              />
+            )}
+            {coherenceScore != null && (
+              <SoftStatCard
+                icon={Layers}
+                label="Coherence"
+                value={`${coherenceScore}/100`}
+                sub={scoreLabel(coherenceScore, 'Well-structured', 'Mostly clear', 'Answers ramble')}
+                pct={coherenceScore}
+              />
+            )}
+          </div>
+          {language.summary && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 12, marginBottom: 24,
+              background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.15)',
+              fontSize: 13, color: '#94a3b8', lineHeight: 1.6,
+            }}>
+              💬 <em>{language.summary}</em>
+            </div>
+          )}
+        </>
+      ) : !hasSoftData ? null : (
+        <div style={{
+          padding: '12px 16px', borderRadius: 12, marginBottom: 24,
+          background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.1)',
+          fontSize: 12, color: '#475569', display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <Mic size={13} />
+          Filler word count, speaking pace, vocabulary &amp; grammar scores are generated asynchronously by Gemini.
+          They'll be ready in a few seconds in the{' '}
+          <a href={`/interviews/${sessionId}`} style={{ color: '#6366f1', textDecoration: 'underline' }}>
+            full report
+          </a>.
+        </div>
+      )}
+
+      {/* ── Section 5: Per-topic breakdown ── */}
+      <div style={{ marginBottom: 6 }}>
+        <SectionLabel icon={TrendingUp} label="Per-Topic Breakdown" />
+      </div>
       <div style={{
         background: 'rgba(15,15,24,0.55)',
         border: '1px solid rgba(255,255,255,0.06)',
         borderRadius: 14, padding: 14,
         display: 'flex', flexDirection: 'column', gap: 10,
+        marginBottom: 24,
       }}>
         {progress.per_topic.map((t) => (
           <TopicRow key={t.topic} t={t} />
         ))}
       </div>
 
-      <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+      {/* ── CTA buttons ── */}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
         <a
           href="/interview"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '10px 18px', borderRadius: 10,
+            padding: '11px 20px', borderRadius: 10,
             background: 'linear-gradient(135deg,#6366f1,#a855f7)',
             color: '#fff', textDecoration: 'none', fontSize: 14, fontWeight: 600,
           }}
@@ -1681,12 +2572,22 @@ function Scorecard({ progress, endReason }) {
           <RotateCcw size={14} /> Start another
         </a>
         <a
+          href={`/interviews/${sessionId}`}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '11px 20px', borderRadius: 10,
+            background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)',
+            color: '#34d399', textDecoration: 'none', fontSize: 14, fontWeight: 600,
+          }}
+        >
+          <Award size={14} /> Full detailed report
+        </a>
+        <a
           href="/interviews"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '10px 18px', borderRadius: 10,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            padding: '11px 20px', borderRadius: 10,
+            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
             color: '#f1f5f9', textDecoration: 'none', fontSize: 14, fontWeight: 600,
           }}
         >
@@ -1694,9 +2595,23 @@ function Scorecard({ progress, endReason }) {
         </a>
       </div>
 
-      <p style={{ marginTop: 20, color: '#64748b', fontSize: 11, textAlign: 'center' }}>
-        End reason: <code style={{ color: '#94a3b8' }}>{endReason}</code> · Session #{progress?.session_id || ''}
+      <p style={{ marginTop: 16, color: '#334155', fontSize: 11, textAlign: 'center' }}>
+        End reason: <code style={{ color: '#475569' }}>{endReason}</code> · Session #{sessionId || ''}
       </p>
+    </div>
+  )
+}
+
+function SectionLabel({ icon: Icon, label }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 7,
+      fontSize: 12, fontWeight: 700, color: '#64748b',
+      textTransform: 'uppercase', letterSpacing: 1.2,
+      marginBottom: 10,
+    }}>
+      <Icon size={13} />
+      {label}
     </div>
   )
 }
@@ -1765,7 +2680,7 @@ export default function InterviewAdaptive() {
   const { sessionId: routeSessionId } = useParams()
   const { user } = useAuth()
 
-  // Four phases: 'setup' | 'camera-setup' | 'live' | 'ended'.
+  // Three phases: 'setup' | 'live' | 'ended'. Camera selection is a dialog inside 'setup'.
   const [phase, setPhase] = useState(routeSessionId ? 'loading' : 'setup')
   const [sessionData, setSessionData] = useState(null)
   const [cameraStreams, setCameraStreams] = useState({})
@@ -1807,30 +2722,28 @@ export default function InterviewAdaptive() {
     return () => { alive = false }
   }, [routeSessionId])
 
-  const handleStarted = (result) => {
+  // Camera streams come directly from the dialog (already open) — skip camera-setup phase
+  const handleStarted = (result, streams = {}) => {
     setSessionData(result)
-    // Go to camera setup before going live.
-    setPhase('camera-setup')
+    setCameraStreams(streams)
+    setPhase('live')
     // Reflect session in URL so reload survives.
     navigate(`/interview/live/${result.session_id}`, { replace: true })
-  }
-
-  const handleCameraReady = (streams) => {
-    setCameraStreams(streams || {})
-    setPhase('live')
   }
 
   const handleEnded = (result) => {
     setEndedSnapshot({
       session_id: result.session_id,
       progress: result.progress,
+      behavioral: result._behavioral || {},   // face analysis snapshot from LiveScreen
+      report: result.report || null,          // Gemini-generated report if available
       end_reason: result.end_reason || 'target_met',
     })
     setPhase('ended')
   }
 
   return (
-    <DarkLayout>
+    <DarkLayout sidebarCollapsed={phase === 'live'}>
       <div style={{ minHeight: '100vh' }}>
         {hydrateError && (
           <div style={{
@@ -1851,10 +2764,6 @@ export default function InterviewAdaptive() {
 
         {phase === 'setup' && <SetupScreen user={user} onStarted={handleStarted} />}
 
-        {phase === 'camera-setup' && (
-          <CameraSetupScreen onReady={handleCameraReady} />
-        )}
-
         {phase === 'live' && sessionData && (
           <LiveScreen
             sessionId={sessionData.session_id}
@@ -1869,7 +2778,13 @@ export default function InterviewAdaptive() {
             <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px' }}>
               <EndBanner endReason={endedSnapshot.end_reason} sessionId={endedSnapshot.session_id} />
             </div>
-            <Scorecard progress={endedSnapshot.progress} endReason={endedSnapshot.end_reason} />
+            <Scorecard
+              progress={endedSnapshot.progress}
+              endReason={endedSnapshot.end_reason}
+              behavioral={endedSnapshot.behavioral || {}}
+              report={endedSnapshot.report || null}
+              sessionId={endedSnapshot.session_id}
+            />
           </>
         )}
       </div>

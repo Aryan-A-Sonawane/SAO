@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
   BadgeCheck,
@@ -12,8 +13,10 @@ import {
   MessageSquare,
   Mic,
   Quote,
+  Shield,
   Sparkles,
   TrendingUp,
+  UserCheck,
 } from 'lucide-react'
 import {
   Bar,
@@ -58,6 +61,7 @@ export default function InterviewReport() {
   const report = session?.report || {}
   const comm = report.communication || {}
   const language = comm.language || {}
+  const behavioral = session?.behavioral_stats || {}
 
   const categoryData = useMemo(() => {
     const cs = report.category_scores || {}
@@ -77,6 +81,29 @@ export default function InterviewReport() {
     const f = comm.filler_word_counts || {}
     return Object.entries(f).map(([word, count]) => ({ word, count }))
   }, [comm.filler_word_counts])
+
+  // Body language signals from behavioral_stats
+  const eyeContactPct = comm.eye_contact_pct ?? behavioral.eye_contact_pct ?? behavioral.gaze_score ?? null
+  const postureScore  = behavioral.posture_score ?? behavioral.upright_head_pct ?? null
+  const topCamScore   = behavioral.top_cam_score ?? null
+  const topCamAlerts  = behavioral.top_cam_alerts ?? 0
+  const expressionData = useMemo(() => {
+    const src = comm.expression_breakdown || behavioral.expressions || {}
+    return Object.entries(src).map(([expr, val]) => ({
+      expr: expr.charAt(0).toUpperCase() + expr.slice(1),
+      pct: Math.round(Number(val) * 100),
+    })).filter((d) => d.pct > 0).sort((a, b) => b.pct - a.pct)
+  }, [comm.expression_breakdown, behavioral.expressions])
+
+  // Derive a confidence score from expression data (happy + neutral = confident)
+  const confidenceScore = useMemo(() => {
+    const src = comm.expression_breakdown || behavioral.expressions || {}
+    const calm = (Number(src.neutral) || 0) + (Number(src.happy) || 0)
+    const total = Object.values(src).reduce((s, v) => s + Number(v), 0)
+    return total > 0 ? Math.round((calm / total) * 100) : null
+  }, [comm.expression_breakdown, behavioral.expressions])
+
+  const hasCameraData = eyeContactPct != null || postureScore != null || expressionData.length > 0
 
   if (isLoading) {
     return (
@@ -151,6 +178,7 @@ export default function InterviewReport() {
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="body-language">Body Language</TabsTrigger>
             <TabsTrigger value="communication">Communication</TabsTrigger>
             <TabsTrigger value="transcript">Transcript</TabsTrigger>
           </TabsList>
@@ -321,6 +349,149 @@ export default function InterviewReport() {
                   ))}
                 </CardContent>
               </Card>
+            )}
+          </TabsContent>
+
+          {/* ── Body Language Tab ── */}
+          <TabsContent value="body-language" className="space-y-4">
+            {!hasCameraData ? (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+                  <UserCheck className="h-10 w-10 text-muted-foreground" />
+                  <p className="text-sm font-medium text-foreground">No camera data for this session</p>
+                  <p className="max-w-sm text-xs text-muted-foreground">
+                    Body language analysis requires the front camera to be active during the interview.
+                    Future sessions will show eye contact, expression, and posture data here.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <BodyStatCard
+                    icon={Eye}
+                    label="Eye Contact"
+                    value={eyeContactPct != null ? `${Math.round(eyeContactPct)}%` : '—'}
+                    sub={
+                      eyeContactPct == null ? 'Camera off'
+                      : eyeContactPct >= 70 ? 'Excellent — strong gaze presence'
+                      : eyeContactPct >= 50 ? 'Good — some wandering'
+                      : 'Needs work — look at the camera more'
+                    }
+                    score={eyeContactPct}
+                  />
+                  <BodyStatCard
+                    icon={Activity}
+                    label="Posture"
+                    value={postureScore != null ? `${Math.round(postureScore)}%` : '—'}
+                    sub={
+                      postureScore == null ? 'Side camera needed'
+                      : postureScore >= 80 ? 'Upright and confident'
+                      : postureScore >= 55 ? 'Mostly upright'
+                      : 'Slouching detected — sit straighter'
+                    }
+                    score={postureScore}
+                  />
+                  <BodyStatCard
+                    icon={Sparkles}
+                    label="Confidence"
+                    value={confidenceScore != null ? `${confidenceScore}%` : '—'}
+                    sub={
+                      confidenceScore == null ? 'No expression data'
+                      : confidenceScore >= 75 ? 'Calm and confident'
+                      : confidenceScore >= 50 ? 'Moderate — some stress signs'
+                      : 'Nervous — practice relaxation'
+                    }
+                    score={confidenceScore}
+                  />
+                  <BodyStatCard
+                    icon={Shield}
+                    label="Integrity"
+                    value={topCamScore != null ? `${topCamScore}%` : '—'}
+                    sub={
+                      topCamScore == null ? 'Top camera not active'
+                      : topCamScore >= 95 ? 'No suspicious activity'
+                      : topCamScore >= 80 ? `${topCamAlerts} look-down event${topCamAlerts !== 1 ? 's' : ''}`
+                      : `${topCamAlerts} suspicious look-down events`
+                    }
+                    score={topCamScore}
+                  />
+                </div>
+
+                {expressionData.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                        <Activity className="h-4 w-4 text-primary" /> Expression breakdown
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {expressionData.map(({ expr, pct }) => {
+                        const color =
+                          expr === 'Happy' || expr === 'Neutral' ? '#10b981'
+                          : expr === 'Surprised' ? '#6366f1'
+                          : expr === 'Fearful' || expr === 'Angry' ? '#ef4444'
+                          : expr === 'Sad' ? '#f59e0b'
+                          : '#94a3b8'
+                        return (
+                          <div key={expr} className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">{expr}</span>
+                              <span className="font-semibold tabular-nums" style={{ color }}>{pct}%</span>
+                            </div>
+                            <div style={{
+                              height: 6, borderRadius: 4,
+                              background: 'rgba(255,255,255,0.06)', overflow: 'hidden',
+                            }}>
+                              <div style={{
+                                width: `${pct}%`, height: '100%',
+                                background: color, borderRadius: 4,
+                                transition: 'width 0.6s ease-out',
+                              }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold">Coaching tips</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm text-muted-foreground">
+                    {eyeContactPct != null && eyeContactPct < 60 && (
+                      <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                        👁️ Look directly at the camera lens, not at your own face preview. Imagine the camera is the interviewer's eyes.
+                      </div>
+                    )}
+                    {postureScore != null && postureScore < 65 && (
+                      <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                        🪑 Sit upright with your back against the chair. A straight spine projects confidence and energy.
+                      </div>
+                    )}
+                    {confidenceScore != null && confidenceScore < 55 && (
+                      <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                        😤 Your expression showed stress signals. Take a breath before answering. Smile briefly at the start — it relaxes both you and the interviewer.
+                      </div>
+                    )}
+                    {topCamAlerts > 2 && (
+                      <div className="rounded-md border border-rose-500/20 bg-rose-500/5 px-3 py-2">
+                        📋 {topCamAlerts} suspicious downward looks detected by the top camera. In a real interview avoid glancing at notes or your phone.
+                      </div>
+                    )}
+                    {eyeContactPct != null && eyeContactPct >= 70 && postureScore != null && postureScore >= 75 && (
+                      <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                        ✅ Strong body language overall — you projected presence and confidence. Keep it up!
+                      </div>
+                    )}
+                    {!hasCameraData && (
+                      <p>Enable all cameras in future sessions for full coaching here.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
             )}
           </TabsContent>
 
@@ -498,6 +669,48 @@ function Stat({ icon: Icon, label, value, sub }) {
         {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
       </div>
     </div>
+  )
+}
+
+function BodyStatCard({ icon: Icon, label, value, sub, score }) {
+  const color =
+    score == null ? '#94a3b8'
+    : score >= 75  ? '#10b981'
+    : score >= 50  ? '#f59e0b'
+    : '#ef4444'
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div
+            style={{
+              display: 'grid',
+              placeItems: 'center',
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: `${color}22`,
+              color,
+              flexShrink: 0,
+            }}
+          >
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
+            <div
+              className="text-2xl font-bold tabular-nums leading-tight"
+              style={{ color }}
+            >
+              {value}
+            </div>
+            {sub && (
+              <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{sub}</div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
