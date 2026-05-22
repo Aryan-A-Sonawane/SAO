@@ -1,41 +1,48 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { useMousePosition } from '../../hooks/useMousePosition'
 import WebGLCanvas from '../landing/WebGLCanvas'
 import DarkSidebar from './DarkSidebar'
 import '../../styles/dashboard-dark.css'
 
-/**
- * DarkLayout — global wrapper for all authenticated dashboard pages.
- * Provides:
- *  • Three.js particle canvas (fixed, behind everything, low particle count)
- *  • Dark glassmorphic sidebar
- *  • Main content pane with backdrop-filter glass panel
- *
- * Usage:
- *   <DarkLayout>
- *     <YourPageContent />
- *   </DarkLayout>
- */
+const SIDEBAR_OPEN_W = 240
+const SIDEBAR_CLOSED_W = 64
+
 export default function DarkLayout({ children }) {
     const mouse = useMousePosition()
     const mouseRef = useRef({ nX: 0, nY: 0 })
 
+    const [sidebarOpen, setSidebarOpen] = useState(() => {
+        try {
+            const saved = localStorage.getItem('sidebar_open')
+            if (saved !== null) return saved === 'true'
+        } catch (_) {}
+        // Default: closed on narrow screens (mobile/tablet), open on desktop
+        return typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+    })
+
     useEffect(() => {
         mouseRef.current = { nX: mouse.nX, nY: mouse.nY }
     }, [mouse.nX, mouse.nY])
+
+    const toggleSidebar = () => {
+        setSidebarOpen(prev => {
+            const next = !prev
+            try { localStorage.setItem('sidebar_open', String(next)) } catch (_) {}
+            return next
+        })
+    }
+
+    const sidebarW = sidebarOpen ? SIDEBAR_OPEN_W : SIDEBAR_CLOSED_W
 
     return (
         <div
             className="dark-app"
             style={{ display: 'flex', minHeight: '100vh', position: 'relative' }}
         >
-            {/* WebGL particle field — subtle, fewer particles for perf */}
             <WebGLCanvas mouseRef={mouseRef} particleCount={900} />
 
-            {/* Dark Sidebar */}
-            <DarkSidebar />
+            <DarkSidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
 
-            {/* Main content — glass panel */}
             <main
                 style={{
                     flex: 1,
@@ -44,6 +51,7 @@ export default function DarkLayout({ children }) {
                     overflowY: 'auto',
                     position: 'relative',
                     zIndex: 1,
+                    transition: 'padding-left 0.3s ease',
                 }}
             >
                 {/* Frosted glass surface behind content */}
@@ -51,12 +59,13 @@ export default function DarkLayout({ children }) {
                     style={{
                         position: 'fixed',
                         inset: 0,
-                        left: 240, /* sidebar width */
+                        left: sidebarW,
                         background: 'rgba(5, 5, 10, 0.55)',
                         backdropFilter: 'blur(12px)',
                         WebkitBackdropFilter: 'blur(12px)',
                         zIndex: 0,
                         pointerEvents: 'none',
+                        transition: 'left 0.3s ease',
                     }}
                 />
                 <div style={{ position: 'relative', zIndex: 1 }}>

@@ -124,7 +124,7 @@ export default function Onboarding() {
     /* Full-page dark canvas — no sidebar for clean onboarding flow.
        The `dark-app` class enables the global glassmorphic primitive overrides
        defined in dashboard-dark.css. */
-    <div className="dark-app relative flex min-h-screen flex-col items-center justify-center overflow-y-auto bg-[#05050a] px-6 py-10 md:px-10 md:py-14">
+    <div className="dark-app relative flex min-h-screen flex-col items-center overflow-y-auto bg-[#05050a] px-6 py-10 md:px-10 md:py-14">
       <WebGLCanvas mouseRef={mouseRef} particleCount={600} />
 
       {/* Content — vertically centered on the page */}
