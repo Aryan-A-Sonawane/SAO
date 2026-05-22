@@ -3,9 +3,15 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from config import settings
 
+# SQLite needs check_same_thread=False to play nice with FastAPI's threadpool;
+# Postgres (Neon, Railway PG, RDS) rejects that arg, so only pass it for SQLite.
+# This lets the same code path work locally on SQLite and in prod on Postgres
+# by switching only the DATABASE_URL env var.
+_is_sqlite = str(settings.DATABASE_URL).startswith("sqlite")
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"check_same_thread": False}  # SQLite specific
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
+    pool_pre_ping=True,  # Neon idles connections after ~5min; ping before use to avoid stale-connection errors.
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
