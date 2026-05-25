@@ -1029,6 +1029,19 @@ function CameraSetupDialog({ onLaunch, onClose }) {
     // Clear ref so unmount cleanup doesn't kill the streams we're handing over
     handedOverRef.current = true
     activeStreamsRef.current = {}
+    // Fire fullscreen request from INSIDE the user click — browsers reject
+    // it without an active gesture, so this is the last safe moment. Wrapped
+    // in try/catch because mobile WebViews + iframes may deny it.
+    try {
+      const el = document.documentElement
+      const req = el.requestFullscreen
+        || el.webkitRequestFullscreen
+        || el.mozRequestFullScreen
+        || el.msRequestFullscreen
+      if (req) req.call(el).catch(() => {})
+    } catch {
+      /* fullscreen unsupported — interview still works */
+    }
     onLaunch(streamMap)
   }
 
@@ -1738,6 +1751,19 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
     if (faceAnalysis.expr) s.expressionHistory.push(faceAnalysis.expr)
   }, [faceAnalysis, endReason])
 
+  // ── Fullscreen exit on session end / unmount ────────────────────────────
+  // Entry is fired inside CameraSetupDialog.handleLaunch where there's an
+  // active user gesture (browsers reject the request otherwise). We only
+  // handle the EXIT here so users aren't trapped after the interview wraps.
+  useEffect(() => {
+    if (endReason && document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {})
+    }
+  }, [endReason])
+  useEffect(() => () => {
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+  }, [])
+
   // Top and side camera monitors — capture live state for display chips
   const topCamAlert   = useTopCameraMonitor(topVideoRef,  behavioralRef, !!cameraStreams.top  && !endReason)
   const sidePosture   = useSideCameraPosture(sideVideoRef, behavioralRef, !!cameraStreams.side && !endReason)
@@ -2059,196 +2085,162 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         padding: '16px 16px 16px 20px',
       }}>
 
-        {/* ═══ VIDEO GRID ═════════════════════════════════════════════════════ */}
+        {/* ═══ TOP VIDEO ROW — Avatar + Front cam side-by-side ══════════════════
+            The right rail (top cam + side cam + ProgressSidebar) lives in its
+            own column outside this stage area now, so the top row only has
+            two equal-width tiles. They keep a 16:9 aspect ratio so their
+            heights match perfectly. ───────────────────────────────────────── */}
         {!endReason && (
           <div style={{
-            flex: 1, minHeight: 120,
+            flexShrink: 0,
             display: 'grid', gridTemplateColumns: '1fr 1fr',
-            gap: 12, marginBottom: 10,
-            overflow: 'hidden',
-            transition: 'flex 0.3s ease',
+            gap: 12, marginBottom: 12,
           }}>
 
-            {/* ── Left col: AI Avatar + Current Question ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
-
-              {/* Avatar tile */}
+            {/* Avatar tile */}
+            <div style={{
+              position: 'relative',
+              background: 'linear-gradient(160deg, #0d0d1f 0%, #0a0a18 100%)',
+              border: '1px solid rgba(99,102,241,0.2)',
+              borderRadius: 16, aspectRatio: '16/9',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+            }}>
               <div style={{
-                position: 'relative', flexShrink: 0,
-                background: 'linear-gradient(160deg, #0d0d1f 0%, #0a0a18 100%)',
-                border: '1px solid rgba(99,102,241,0.2)',
-                borderRadius: 16, aspectRatio: '16/9',
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
-              }}>
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: 'radial-gradient(ellipse at 50% 60%, rgba(99,102,241,0.12) 0%, transparent 65%)',
-                  pointerEvents: 'none',
-                }} />
-                <HumanAvatar isSpeaking={isSpeaking} size={140} />
-                <AnimatePresence>
-                  {isSpeaking && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                      style={{
-                        position: 'absolute', bottom: 36, left: '50%', transform: 'translateX(-50%)',
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '4px 12px', borderRadius: 99,
-                        background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.3)',
-                        fontSize: 11, color: '#a5b4fc', fontWeight: 600, whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <motion.span
-                        animate={{ scale: [1, 1.4, 1] }}
-                        transition={{ duration: 0.7, repeat: Infinity }}
-                        style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#6366f1' }}
-                      />
-                      Speaking…
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <div style={{
-                  position: 'absolute', bottom: 10, left: 12,
-                  padding: '3px 10px', borderRadius: 6,
-                  background: 'rgba(0,0,0,0.65)', fontSize: 11,
-                  color: '#94a3b8', fontWeight: 600, letterSpacing: 0.4,
-                }}>
-                  AI Interviewer
-                </div>
-              </div>
-
-              {/* Current question panel */}
-              <div style={{
-                flex: 1, minHeight: 0,
-                background: 'rgba(99,102,241,0.04)',
-                border: '1px solid rgba(99,102,241,0.12)',
-                borderRadius: 12, padding: '14px 16px',
-                overflowY: 'auto',
-                display: 'flex', flexDirection: 'column', justifyContent: 'center',
-              }}>
-                {currentQ ? (
-                  <>
-                    <div style={{ fontSize: 10, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
-                      Current question
-                    </div>
-                    <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.65, fontFamily: 'Inter, system-ui' }}>
-                      {currentQ.text}
-                    </div>
-                    {(currentQ.topic || currentQ.difficulty || currentQ.requires_diagram) && (
-                      <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                        {currentQ.topic && (
-                          <span style={{ padding: '2px 8px', borderRadius: 5, background: 'rgba(99,102,241,0.15)', fontSize: 11, color: '#a5b4fc', fontWeight: 700 }}>
-                            {currentQ.topic}
-                          </span>
-                        )}
-                        {currentQ.difficulty && (
-                          <span style={{ padding: '2px 8px', borderRadius: 5, background: 'rgba(168,85,247,0.12)', fontSize: 11, color: '#c084fc', fontWeight: 700 }}>
-                            {currentQ.difficulty}
-                          </span>
-                        )}
-                        {currentQ.requires_diagram && (
-                          <span style={{ padding: '2px 8px', borderRadius: 5, background: 'rgba(16,185,129,0.12)', fontSize: 11, color: '#34d399', fontWeight: 700 }}>
-                            Diagram
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <span style={{ color: '#475569', fontSize: 13 }}>Waiting for first question…</span>
+                position: 'absolute', inset: 0,
+                background: 'radial-gradient(ellipse at 50% 60%, rgba(99,102,241,0.12) 0%, transparent 65%)',
+                pointerEvents: 'none',
+              }} />
+              <HumanAvatar isSpeaking={isSpeaking} size={140} />
+              <AnimatePresence>
+                {isSpeaking && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    style={{
+                      position: 'absolute', bottom: 36, left: '50%', transform: 'translateX(-50%)',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '4px 12px', borderRadius: 99,
+                      background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.3)',
+                      fontSize: 11, color: '#a5b4fc', fontWeight: 600, whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <motion.span
+                      animate={{ scale: [1, 1.4, 1] }}
+                      transition={{ duration: 0.7, repeat: Infinity }}
+                      style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#6366f1' }}
+                    />
+                    Speaking…
+                  </motion.div>
                 )}
+              </AnimatePresence>
+              <div style={{
+                position: 'absolute', bottom: 10, left: 12,
+                padding: '3px 10px', borderRadius: 6,
+                background: 'rgba(0,0,0,0.65)', fontSize: 11,
+                color: '#94a3b8', fontWeight: 600, letterSpacing: 0.4,
+              }}>
+                AI Interviewer
               </div>
             </div>
 
-            {/* ── Right col: Front cam large + Top/Side row below ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
-
-              {/* Front camera — same aspect-ratio as avatar so heights match */}
+            {/* Front camera */}
+            <div style={{
+              aspectRatio: '16/9', position: 'relative',
+              background: '#080812',
+              border: `2px solid ${faceAnalysis?.gazeDirect ? 'rgba(16,185,129,0.45)' : 'rgba(255,255,255,0.1)'}`,
+              borderRadius: 16, overflow: 'hidden',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+              transition: 'border-color 0.5s',
+            }}>
+              <video
+                ref={videoRef}
+                autoPlay muted playsInline
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
               <div style={{
-                flexShrink: 0, aspectRatio: '16/9', position: 'relative',
-                background: '#080812',
-                border: `2px solid ${faceAnalysis?.gazeDirect ? 'rgba(16,185,129,0.45)' : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 16, overflow: 'hidden',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
-                transition: 'border-color 0.5s',
+                position: 'absolute', bottom: 10, left: 12,
+                padding: '3px 10px', borderRadius: 6,
+                background: 'rgba(0,0,0,0.7)', fontSize: 11,
+                color: '#94a3b8', fontWeight: 600, letterSpacing: 0.4,
               }}>
-                <video
-                  ref={videoRef}
-                  autoPlay muted playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                />
-                <div style={{
-                  position: 'absolute', bottom: 10, left: 12,
-                  padding: '3px 10px', borderRadius: 6,
-                  background: 'rgba(0,0,0,0.7)', fontSize: 11,
-                  color: '#94a3b8', fontWeight: 600, letterSpacing: 0.4,
-                }}>
-                  You · Front
-                </div>
-                {faceAnalysis && (
-                  <div style={{
-                    position: 'absolute', bottom: 10, right: 10,
-                    display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end',
-                    maxWidth: '60%',
-                  }}>
-                    <FaceInsightChip label="Eye contact" value={faceAnalysis.gazeDirect ? 'Good' : 'Look at cam'} ok={faceAnalysis.gazeDirect} />
-                    <FaceInsightChip label="Head" value={faceAnalysis.uprightHead ? 'Upright' : 'Tilted'} ok={faceAnalysis.uprightHead} />
-                    <FaceInsightChip label={capitalize(faceAnalysis.expr)} value={`${faceAnalysis.confidence}%`} ok={faceAnalysis.expr === 'neutral' || faceAnalysis.expr === 'happy'} neutral={faceAnalysis.expr === 'neutral'} />
-                  </div>
-                )}
+                You · Front
               </div>
-
-              {/* Top + Side cams — fill remaining height below front cam */}
-              {(cameraStreams.top || cameraStreams.side) && (
-                <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 10 }}>
-                  {cameraStreams.top && (
-                    <div style={{
-                      flex: 1, minWidth: 0, height: '100%',
-                      background: '#060610',
-                      border: `1px solid ${topAlertOk ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.4)'}`,
-                      borderRadius: 10, overflow: 'hidden', position: 'relative',
-                      transition: 'border-color 0.4s',
-                    }}>
-                      <PipFeed ref={topVideoRef} stream={cameraStreams.top} label={null} />
-                      <div style={{
-                        position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px 8px',
-                        background: 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, transparent 100%)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      }}>
-                        <span style={{ fontSize: 9, color: '#64748b', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>📷 Top</span>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: topAlertOk ? '#34d399' : '#f87171', background: topAlertOk ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.15)', padding: '1px 5px', borderRadius: 4 }}>
-                          {topAlertLabel}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {cameraStreams.side && (
-                    <div style={{
-                      flex: 1, minWidth: 0, height: '100%',
-                      background: '#060610',
-                      border: '1px solid rgba(168,85,247,0.2)',
-                      borderRadius: 10, overflow: 'hidden', position: 'relative',
-                    }}>
-                      <PipFeed ref={sideVideoRef} stream={cameraStreams.side} label={null} />
-                      <div style={{
-                        position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px 8px',
-                        background: 'linear-gradient(0deg, rgba(0,0,0,0.78) 0%, transparent 100%)',
-                      }}>
-                        <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 2 }}>👤 Side</div>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {sidePosture.upright !== null && <FaceInsightChip label="Posture" value={sidePosture.upright ? 'Upright' : 'Slouching'} ok={sidePosture.upright} />}
-                          {sidePosture.hands !== 'unknown' && <FaceInsightChip label="Hands" value={sidePosture.hands === 'moving' ? 'Fidgeting' : 'Still'} ok={sidePosture.hands !== 'moving'} />}
-                          {sidePosture.legs !== 'unknown' && <FaceInsightChip label="Legs" value={sidePosture.legs === 'shaking' ? 'Shaking' : 'Still'} ok={sidePosture.legs !== 'shaking'} />}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+              {faceAnalysis && (
+                <div style={{
+                  position: 'absolute', bottom: 10, right: 10,
+                  display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end',
+                  maxWidth: '60%',
+                }}>
+                  <FaceInsightChip label="Eye contact" value={faceAnalysis.gazeDirect ? 'Good' : 'Look at cam'} ok={faceAnalysis.gazeDirect} />
+                  <FaceInsightChip label="Head" value={faceAnalysis.uprightHead ? 'Upright' : 'Tilted'} ok={faceAnalysis.uprightHead} />
+                  <FaceInsightChip label={capitalize(faceAnalysis.expr)} value={`${faceAnalysis.confidence}%`} ok={faceAnalysis.expr === 'neutral' || faceAnalysis.expr === 'happy'} neutral={faceAnalysis.expr === 'neutral'} />
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ═══ BIG QUESTION CARD ════════════════════════════════════════════════
+            Fills the remaining vertical space between the video row and the
+            answer composer. On wide screens this is roomy; the inner panel
+            scrolls if the question is long. ───────────────────────────────── */}
+        {!endReason && (
+          <div style={{
+            flex: 1, minHeight: 120,
+            background: 'rgba(99,102,241,0.04)',
+            border: '1px solid rgba(99,102,241,0.12)',
+            borderRadius: 14, padding: '20px 24px',
+            marginBottom: 12, overflowY: 'auto',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            {currentQ ? (
+              <>
+                <div style={{ fontSize: 10, color: '#6366f1', textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: 700, marginBottom: 10 }}>
+                  Current question
+                </div>
+                <div style={{
+                  fontSize: 'clamp(14px, 1.6vw, 17px)', color: '#e2e8f0', lineHeight: 1.7,
+                  fontFamily: 'Inter, system-ui',
+                }}>
+                  {currentQ.text}
+                </div>
+                {(currentQ.topic || currentQ.difficulty || currentQ.requires_diagram || currentQ.requires_code) && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+                    {currentQ.topic && (
+                      <span style={{ padding: '3px 10px', borderRadius: 6, background: 'rgba(99,102,241,0.15)', fontSize: 11, color: '#a5b4fc', fontWeight: 700 }}>
+                        {currentQ.topic}
+                      </span>
+                    )}
+                    {currentQ.difficulty && (
+                      <span style={{ padding: '3px 10px', borderRadius: 6, background: 'rgba(168,85,247,0.12)', fontSize: 11, color: '#c084fc', fontWeight: 700 }}>
+                        {currentQ.difficulty}
+                      </span>
+                    )}
+                    {currentQ.requires_diagram && (
+                      <span style={{ padding: '3px 10px', borderRadius: 6, background: 'rgba(16,185,129,0.12)', fontSize: 11, color: '#34d399', fontWeight: 700 }}>
+                        Diagram
+                      </span>
+                    )}
+                    {currentQ.requires_code && (
+                      <button
+                        onClick={() => setCodeOpen(true)}
+                        style={{
+                          padding: '3px 10px', borderRadius: 6,
+                          background: 'rgba(168,85,247,0.18)', border: '1px solid rgba(168,85,247,0.35)',
+                          fontSize: 11, color: '#e9d5ff', fontWeight: 700, cursor: 'pointer',
+                        }}
+                      >
+                        Code suggested — click to open editor
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <span style={{ color: '#475569', fontSize: 13 }}>Waiting for first question…</span>
+            )}
           </div>
         )}
 
@@ -2424,20 +2416,79 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         )}
       </div>
 
-      {/* ── Right: Progress sidebar ──────────────────────────────────────────── */}
+      {/* ── Right rail: Top cam + Side cam (compressed) stacked above the
+            ProgressSidebar (topics list).  All three tiles share the same
+            width (300px) so the column reads as one unit.  The topics list
+            inside ProgressSidebar already scrolls when it overflows. ────── */}
       <div style={{
-        flexShrink: 0, width: 280,
+        flexShrink: 0, width: 300,
         padding: '16px 16px 16px 0',
-        height: '100vh',
-        display: 'flex', flexDirection: 'column',
-      }}>
-        <ProgressSidebar
-          progress={progress}
-          mode={mode}
-          endReason={endReason}
-          ending={ending}
-          onEnd={handleEndManually}
-        />
+        height: '100vh', boxSizing: 'border-box',
+        display: 'flex', flexDirection: 'column', gap: 10,
+        overflow: 'hidden',
+      }} className="iv-right-rail">
+        {/* Top cam (anti-cheat). Hidden on mobile via CSS below. */}
+        {cameraStreams.top && (
+          <div
+            className="iv-right-rail-cam"
+            style={{
+              flexShrink: 0, aspectRatio: '16/9',
+              background: '#060610',
+              border: `1px solid ${topAlertOk ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.4)'}`,
+              borderRadius: 12, overflow: 'hidden', position: 'relative',
+              transition: 'border-color 0.4s',
+            }}
+          >
+            <PipFeed ref={topVideoRef} stream={cameraStreams.top} label={null} />
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px 8px',
+              background: 'linear-gradient(0deg, rgba(0,0,0,0.78) 0%, transparent 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>📷 Top · Anti-cheat</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: topAlertOk ? '#34d399' : '#f87171', background: topAlertOk ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.15)', padding: '1px 5px', borderRadius: 4 }}>
+                {topAlertLabel}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Side / wide-view cam (posture). */}
+        {cameraStreams.side && (
+          <div
+            className="iv-right-rail-cam"
+            style={{
+              flexShrink: 0, aspectRatio: '16/9',
+              background: '#060610',
+              border: '1px solid rgba(168,85,247,0.25)',
+              borderRadius: 12, overflow: 'hidden', position: 'relative',
+            }}
+          >
+            <PipFeed ref={sideVideoRef} stream={cameraStreams.side} label={null} />
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px 8px',
+              background: 'linear-gradient(0deg, rgba(0,0,0,0.82) 0%, transparent 100%)',
+            }}>
+              <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 2 }}>👤 Side · Posture</div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {sidePosture.upright !== null && <FaceInsightChip label="Posture" value={sidePosture.upright ? 'Upright' : 'Slouching'} ok={sidePosture.upright} />}
+                {sidePosture.hands !== 'unknown' && <FaceInsightChip label="Hands" value={sidePosture.hands === 'moving' ? 'Fidgeting' : 'Still'} ok={sidePosture.hands !== 'moving'} />}
+                {sidePosture.legs !== 'unknown' && <FaceInsightChip label="Legs" value={sidePosture.legs === 'shaking' ? 'Shaking' : 'Still'} ok={sidePosture.legs !== 'shaking'} />}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ProgressSidebar fills remaining height and scrolls inside. */}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+          <ProgressSidebar
+            progress={progress}
+            mode={mode}
+            endReason={endReason}
+            ending={ending}
+            onEnd={handleEndManually}
+          />
+        </div>
       </div>
 
       <CaptureModal
@@ -2448,6 +2499,17 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         onResult={handleCaptureResult}
         cameraStream={cameraStreams.top || cameraStreams.front || null}
       />
+
+      {/* Responsive: hide the right rail on narrow viewports — the topics
+          list is still reachable via the End button + small overlay button
+          in the header (already present elsewhere in the app).  The Top/Side
+          camera feeds are also collapsed to avoid eating screen real-estate
+          on phones. */}
+      <style>{`
+        @media (max-width: 900px) {
+          .iv-right-rail { display: none !important; }
+        }
+      `}</style>
     </div>
   )
 }

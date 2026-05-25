@@ -2,9 +2,13 @@
 InterviewVault — Gamification Service
 Badge definitions, level system, XP awards, and streak tracking.
 """
+import logging
+import threading
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 import models
+
+logger = logging.getLogger(__name__)
 
 
 # ─── Badge Definitions ────────────────────────────────────────────────────────
@@ -163,6 +167,17 @@ def _has_badge(db: Session, user_id: int, badge_key: str) -> bool:
     ).first() is not None
 
 
+def _send_badge_email_async(user, badge_payload):
+    """Send the badge-earned email in a background thread so SMTP latency
+    never gates the calling request (which is usually a submission-eval
+    write path)."""
+    try:
+        from services.email_service import send_badge_earned_email
+        send_badge_earned_email(user, badge_payload)
+    except Exception as e:  # noqa: BLE001 — email is best-effort
+        logger.exception("[gamification] badge email failed for user %s: %s", getattr(user, "id", "?"), e)
+
+
 def _award_badge(db: Session, user: models.User, badge_key: str):
     """Award a badge and its XP bonus."""
     if _has_badge(db, user.id, badge_key):
@@ -178,6 +193,23 @@ def _award_badge(db: Session, user: models.User, badge_key: str):
         award_xp(db, user, xp_bonus, f"badge:{badge_key}")
 
     db.flush()
+
+    # Fire the badge-earned email. We use a daemon thread (rather than
+    # FastAPI BackgroundTasks) because gamification is invoked from several
+    # places — some have access to BackgroundTasks, some don't — so a
+    # local fire-and-forget keeps the call sites uniform.
+    if getattr(user, "email", None):
+        threading.Thread(
+            target=_send_badge_email_async,
+            args=(user, {
+                "key": badge_key,
+                "name": badge_def.get("name") or badge_def.get("title") or badge_key,
+                "description": badge_def.get("description") or "",
+                "icon": badge_def.get("icon") or "🏆",
+            }),
+            daemon=True,
+        ).start()
+
     return badge
 
 

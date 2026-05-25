@@ -11,6 +11,7 @@ import './index.css'
 // TakeAssessment pulling in face-api.js + TensorFlow) cannot white-screen
 // the entire app. Suspense shows the dark spinner while any chunk loads.
 const Landing             = lazy(() => import('./pages/Landing'))
+const DownloadApp         = lazy(() => import('./pages/DownloadApp'))
 const Login               = lazy(() => import('./pages/Login'))
 const Register            = lazy(() => import('./pages/Register'))
 const StudentDashboard    = lazy(() => import('./pages/StudentDashboard'))
@@ -117,6 +118,7 @@ function AppRoutes() {
       <Routes>
         {/* Public */}
         <Route path="/" element={<Landing />} />
+        <Route path="/download" element={<DownloadApp />} />
         <Route
           path="/login"
           element={user && !isDemoMode ? <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} /> : <Login />}

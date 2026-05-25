@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
+from pydantic import BaseModel
+from typing import Optional
 import models
 import schemas
 from auth import verify_password, get_password_hash, create_access_token, get_current_user
 from database import get_db
+from services.email_service import send_welcome_email
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -21,7 +24,11 @@ def _normalize_email(email: str) -> str:
 
 
 @router.post("/register", response_model=schemas.TokenResponse)
-def register(user_data: schemas.UserRegister, db: Session = Depends(get_db)):
+def register(
+    user_data: schemas.UserRegister,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     email = _normalize_email(user_data.email)
 
     # Check if email already exists (case-insensitive)
@@ -51,6 +58,10 @@ def register(user_data: schemas.UserRegister, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Fire the welcome email out-of-band so SMTP latency never gates the
+    # response. Failures are logged inside the service — never raise here.
+    background_tasks.add_task(send_welcome_email, user, "email")
 
     token = create_access_token({"sub": str(user.id)})
     return schemas.TokenResponse(

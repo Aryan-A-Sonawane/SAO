@@ -54,6 +54,24 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
 
+    # ─── SMTP / Transactional email ──────────────────────────────────────────
+    # When SMTP_HOST is empty the email service logs the rendered body to
+    # stdout instead of sending — handy for dev without real credentials.
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    SMTP_USE_SSL: bool = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+    EMAIL_FROM_ADDRESS: str = os.getenv("EMAIL_FROM_ADDRESS", "no-reply@interviewvault.app")
+    EMAIL_FROM_NAME: str = os.getenv("EMAIL_FROM_NAME", "InterviewVault")
+    EMAIL_REPLY_TO: str = os.getenv("EMAIL_REPLY_TO", "hello@interviewvault.app")
+
+    # ─── Google OAuth (Sign in with Google) ──────────────────────────────────
+    # Web client ID issued in Google Cloud Console. When empty the /auth/google
+    # endpoint returns 503 so the frontend can degrade gracefully.
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+
     class Config:
         env_file = ".env"
         extra = "ignore"
