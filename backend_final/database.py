@@ -32,6 +32,7 @@ def create_tables():
     _ensure_sqlite_user_columns()
     _ensure_sqlite_interview_session_columns()
     _migrate_learning_paths_multi_role()
+    _ensure_sqlite_learning_path_jd_columns()
 
 
 def _ensure_sqlite_interview_session_columns():
@@ -48,6 +49,7 @@ def _ensure_sqlite_interview_session_columns():
         "state": "ALTER TABLE interview_sessions ADD COLUMN state JSON",
         "target_duration_minutes": "ALTER TABLE interview_sessions ADD COLUMN target_duration_minutes INTEGER DEFAULT 30",
         "ended_at": "ALTER TABLE interview_sessions ADD COLUMN ended_at DATETIME",
+        "archived": "ALTER TABLE interview_sessions ADD COLUMN archived BOOLEAN DEFAULT 0 NOT NULL",
     }
 
     with engine.begin() as conn:
@@ -82,6 +84,37 @@ def _ensure_sqlite_user_columns():
 
     with engine.begin() as conn:
         existing = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
+        for name, alter_sql in required_columns.items():
+            if name not in existing:
+                conn.execute(text(alter_sql))
+
+
+def _ensure_sqlite_learning_path_jd_columns():
+    """Backfill the columns added in the pre-launch polish pass (Item 2):
+       - role_title (display name for custom JD-derived roles)
+       - source     ("standard" | "jd" | "diagnostic")
+       - jd_text    (raw JD text retained for custom roles)
+
+    Idempotent — runs every startup and only ALTERs columns that don't yet
+    exist. Mirrors the pattern used by `_ensure_sqlite_user_columns` and
+    `_ensure_sqlite_interview_session_columns` above.
+    """
+    if not str(settings.DATABASE_URL).startswith("sqlite"):
+        return
+
+    required_columns = {
+        "role_title": "ALTER TABLE learning_paths ADD COLUMN role_title VARCHAR(200) DEFAULT ''",
+        "source": "ALTER TABLE learning_paths ADD COLUMN source VARCHAR(20) DEFAULT 'standard'",
+        "jd_text": "ALTER TABLE learning_paths ADD COLUMN jd_text TEXT DEFAULT ''",
+    }
+
+    with engine.begin() as conn:
+        exists = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='learning_paths'"
+        )).fetchone()
+        if not exists:
+            return
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(learning_paths)"))}
         for name, alter_sql in required_columns.items():
             if name not in existing:
                 conn.execute(text(alter_sql))

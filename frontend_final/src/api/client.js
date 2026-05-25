@@ -45,9 +45,13 @@ api.interceptors.response.use(
 export const onboardingApi = {
   status: () => api.get('/onboarding/status').then((r) => r.data),
   roles: () => api.get('/onboarding/roles').then((r) => r.data),
-  analyzeResume: (file) => {
+  // `selectedRoleId` is optional — when provided, the backend also returns
+  // `match_for_selected` so the UI can show a direct fit % for the role the
+  // user already picked, alongside the top-3 generic suggestions.
+  analyzeResume: (file, selectedRoleId) => {
     const fd = new FormData()
     fd.append('resume', file)
+    if (selectedRoleId) fd.append('selected_role_id', selectedRoleId)
     return api
       .post('/onboarding/analyze-resume', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -56,6 +60,26 @@ export const onboardingApi = {
   },
   selectRole: (role_id) => api.post('/onboarding/select-role', { role_id }).then((r) => r.data),
   complete: () => api.post('/onboarding/complete').then((r) => r.data),
+  // JD-driven custom role flow — Item 2.
+  uploadJD: (file) => {
+    const fd = new FormData()
+    fd.append('jd_file', file)
+    return api
+      .post('/onboarding/upload-jd', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
+      })
+      .then((r) => r.data)
+  },
+  createRoleFromJD: ({ role_name, jd_text, green_topics, yellow_topics }) =>
+    api
+      .post('/onboarding/create-role-from-jd', {
+        role_name,
+        jd_text,
+        green_topics,
+        yellow_topics,
+      })
+      .then((r) => r.data),
 }
 
 export const learningPathApi = {
@@ -151,11 +175,17 @@ export const diagnosticApi = {
 }
 
 export const interviewSessionsApi = {
-  list: ({ limit = 20, offset = 0 } = {}) =>
-    api.get('/interviews/sessions', { params: { limit, offset } }).then((r) => r.data),
+  list: ({ limit = 20, offset = 0, includeArchived = false } = {}) =>
+    api
+      .get('/interviews/sessions', {
+        params: { limit, offset, include_archived: includeArchived },
+      })
+      .then((r) => r.data),
   get: (id) => api.get(`/interviews/sessions/${id}`).then((r) => r.data),
   create: (payload) => api.post('/interviews/sessions', payload).then((r) => r.data),
   remove: (id) => api.delete(`/interviews/sessions/${id}`).then((r) => r.data),
+  setArchived: (id, archived) =>
+    api.patch(`/interviews/sessions/${id}/archive`, { archived }).then((r) => r.data),
 }
 
 // ─── Phase 3 + 4: server-side adaptive interview engine ────────────────────
@@ -205,6 +235,29 @@ export const adaptiveInterviewApi = {
       })
       .then((r) => r.data)
   },
+
+  // Item 3: kick off a mock interview tailored to an uploaded JD.
+  startFromJD: ({ jd_text, role_title, target_duration_minutes,
+                  green_topics, yellow_topics = [], focus_areas = [] }) =>
+    api
+      .post('/interviews/adaptive/start-from-jd', {
+        jd_text,
+        role_title,
+        target_duration_minutes,
+        green_topics,
+        yellow_topics,
+        focus_areas,
+      })
+      .then((r) => r.data),
+
+  // Item 7: LLM-analysed in-interview code panel. No compiler — just a
+  // structured critique from Gemini including a simulated output.
+  analyzeCode: (sessionId, { code, language, question_context }) =>
+    api
+      .post(`/interviews/adaptive/${sessionId}/analyze-code`, {
+        code, language, question_context,
+      }, { timeout: 60000 })
+      .then((r) => r.data),
 }
 
 // ─── Phase 2: resume management from the profile page ─────────────────────
@@ -230,6 +283,23 @@ export const resumeApi = {
 export const skillProfileApi = {
   get: () => api.get('/users/skill-profile').then((r) => r.data),
   update: (payload) => api.put('/users/skill-profile/update', payload).then((r) => r.data),
+}
+
+// Item 5: Remediation Hub — weak topic aggregation + article + micro-quiz.
+export const remediationApi = {
+  weakAreas: () => api.get('/remediation/weak-areas').then((r) => r.data),
+  microQuiz: (topic) =>
+    api.post('/remediation/micro-quiz', { topic }).then((r) => r.data),
+  article: (topic, job_role = '') =>
+    api.get('/remediation/article', { params: { topic, job_role } }).then((r) => r.data),
+  fromInterview: (session_id) =>
+    api.post(`/remediation/from-interview/${session_id}`).then((r) => r.data),
+}
+
+// Item 9: dashboard summary — reads consolidated data for the student dashboard.
+export const userApi = {
+  dashboardSummary: () => api.get('/users/dashboard-summary').then((r) => r.data),
+  activityInsights: () => api.get('/users/activity-insights').then((r) => r.data),
 }
 
 export default api

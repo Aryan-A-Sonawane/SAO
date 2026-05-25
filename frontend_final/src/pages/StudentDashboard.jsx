@@ -6,7 +6,7 @@ import {
   Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
 } from 'chart.js'
 import { Radar, Bar } from 'react-chartjs-2'
-import { Command as CommandIcon, BookOpen, Activity, Layers } from 'lucide-react'
+import { Command as CommandIcon, BookOpen, Activity, Layers, Sparkles } from 'lucide-react'
 import DarkLayout from '../components/layout/DarkLayout'
 import JoinClassModal from '../components/dashboard/JoinClassModal'
 import ClassroomCard from '../components/dashboard/ClassroomCard'
@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
+import { useDashboardSummary, useActivityInsights } from '../lib/queries'
 import {
   DEMO_STUDENT_ANALYTICS, DEMO_ASSESSMENTS, DEMO_CLASSROOMS,
   DEMO_GAMIFICATION, DEMO_LEADERBOARD, DEMO_DAILY_PLAN,
@@ -119,6 +120,16 @@ export default function StudentDashboard() {
   const { user, isDemoMode } = useAuth()
   const { t } = useLang()
   const navigate = useNavigate()
+
+  // Dashboard summary via React Query — reactive to role switches.
+  // When the user switches role, useSwitchRole invalidates this key and the
+  // readiness ring automatically re-fetches with the new role's data.
+  const { data: summary } = useDashboardSummary({ enabled: !isDemoMode })
+
+  // Gemini-powered insights — lazy, non-blocking, 5-minute stale time.
+  const { data: insightsData, isLoading: insightsLoading } = useActivityInsights({
+    enabled: !isDemoMode,
+  })
 
   useEffect(() => {
     if (isDemoMode) {
@@ -252,6 +263,9 @@ export default function StudentDashboard() {
         </div>
       </motion.div>
 
+      {/* ── Item 9: Readiness + next-best-actions strip ── */}
+      {summary && <ReadinessStrip summary={summary} navigate={navigate} />}
+
       <Tabs defaultValue="learn" className="w-full">
         <TabsList
           className="mb-6"
@@ -283,15 +297,121 @@ export default function StudentDashboard() {
 
         <TabsContent value="activity">
 
-      {/* ═══ YOUR NUMBERS — passive snapshot of where you stand ═══ */}
+      {/* ═══ YOUR NUMBERS — role-aware math stats ═══ */}
       <section className="dk-section-group dk-section-group--stats">
         <div className="dk-section-eyebrow dk-section-eyebrow--indigo">Your numbers</div>
         <div className="dk-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-          <StatCard icon="📝" iconClass="indigo" value={analytics?.total_submissions || 0} label="Assessments Taken" />
-          <StatCard icon="⭐" iconClass="amber" value={`${analytics?.average_score || 0}%`} label="Average Score" />
-          <StatCard icon="🏆" iconClass="green" value={`${analytics?.best_score || 0}%`} label="Best Score" />
-          <StatCard icon="⚡" iconClass="violet" value={analytics?.xp_points || 0} label="XP Points"
-            sub={`🔥 ${analytics?.streak_days || 0} day streak`} />
+          {/* Topics Mastered — derived from learning path completion */}
+          <StatCard
+            icon="📚"
+            iconClass="green"
+            value={(() => {
+              const done = summary?.learn_progress?.topics_completed_total ?? 0
+              const total = summary?.learn_progress?.topics_total ?? 0
+              return total > 0 ? `${done}/${total}` : done
+            })()}
+            label="Topics Mastered"
+            sub={summary?.learn_progress?.topics_total > 0
+              ? `${Math.round((summary.learn_progress.topics_completed_total / summary.learn_progress.topics_total) * 100)}% of core path`
+              : 'Start your path to track'}
+          />
+          {/* Path Progress — weighted formula: completed + partial credit */}
+          <StatCard
+            icon="🗺️"
+            iconClass="indigo"
+            value={`${summary?.readiness_breakdown?.topics_mastered_pct ?? 0}%`}
+            label="Path Progress"
+            sub={summary?.learn_progress?.topics_in_progress > 0
+              ? `${summary.learn_progress.topics_in_progress} topic${summary.learn_progress.topics_in_progress > 1 ? 's' : ''} in flight`
+              : 'Pick up a topic to begin'}
+          />
+          {/* Study Momentum — XP earned this week, derived from weekly series */}
+          <StatCard
+            icon="⚡"
+            iconClass="amber"
+            value={(() => {
+              const series = summary?.activity_progress?.weekly_xp || []
+              const weeklyTotal = series.reduce((s, d) => s + (d.xp || 0), 0)
+              const activeDays = series.filter(d => d.xp > 0).length
+              return weeklyTotal > 0 ? `${weeklyTotal} XP` : `${analytics?.xp_points || 0} XP`
+            })()}
+            label="This Week's XP"
+            sub={(() => {
+              const series = summary?.activity_progress?.weekly_xp || []
+              const activeDays = series.filter(d => d.xp > 0).length
+              return activeDays > 0
+                ? `Active ${activeDays}/7 days this week`
+                : `🔥 ${analytics?.streak_days || summary?.learn_progress?.streak_days || 0} day streak`
+            })()}
+          />
+          {/* Weak Spots — topics below threshold, drives remediation CTA */}
+          <StatCard
+            icon="🎯"
+            iconClass="violet"
+            value={summary?.readiness_breakdown?.weak_topics_remaining ?? analytics?.total_submissions ?? 0}
+            label={summary?.readiness_breakdown?.weak_topics_remaining != null ? 'Weak Spots' : 'Assessments'}
+            sub={summary?.readiness_breakdown?.weak_topics_remaining != null
+              ? (summary.readiness_breakdown.weak_topics_remaining === 0
+                  ? '✅ No weak spots detected'
+                  : 'Topics scoring below 55 — fix these first')
+              : `⭐ Avg ${analytics?.average_score || 0}%`}
+          />
+        </div>
+      </section>
+
+      {/* ═══ AI INSIGHTS — Gemini-generated, lazy-loaded ═══ */}
+      <section className="dk-section-group" style={{ marginTop: 0 }}>
+        <div style={{
+          borderRadius: 16,
+          background: 'linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.04))',
+          border: '1px solid rgba(168,85,247,0.18)',
+          padding: '18px 22px',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+            fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.12em',
+            textTransform: 'uppercase', color: '#c084fc',
+          }}>
+            <Sparkles size={13} /> AI Insights
+          </div>
+          {insightsLoading ? (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} style={{
+                  flex: '1 1 220px', height: 54, borderRadius: 10,
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  animation: 'pulse 1.5s ease-in-out infinite',
+                }} />
+              ))}
+            </div>
+          ) : insightsData?.insights?.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+              {insightsData.insights.map((ins, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.08, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '12px 14px', borderRadius: 12,
+                    background: 'rgba(255,255,255,0.025)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <span style={{ fontSize: '1.1rem', lineHeight: 1.4, flexShrink: 0 }}>{ins.icon}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--dk-text-muted)', lineHeight: 1.55 }}>
+                    {ins.text}
+                  </span>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: '0.82rem', color: 'var(--dk-text-muted)' }}>
+              Complete a topic or interview to unlock personalized insights.
+            </p>
+          )}
         </div>
       </section>
 
@@ -731,48 +851,6 @@ export default function StudentDashboard() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }} className="dk-stagger">
-            {/* Demo Coding Challenge Card */}
-            <div
-              className="dk-assessment-card"
-              onClick={() => navigate('/demo/coding')}
-              style={{ cursor: 'pointer', border: '1px solid rgba(168,85,247,0.2)', position: 'relative', overflow: 'hidden' }}
-              role="button" tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && navigate('/demo/coding')}
-            >
-              <div style={{
-                position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-                background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.5), transparent)',
-              }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ fontSize: '2rem' }}>💻</div>
-                <span style={{
-                  padding: '4px 10px',
-                  borderRadius: 20,
-                  background: 'rgba(168,85,247,0.1)',
-                  border: '1px solid rgba(168,85,247,0.25)',
-                  color: '#c084fc',
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.05em',
-                  animation: 'demo-badge-pulse 3s ease-in-out infinite',
-                }}>✨ DEMO</span>
-              </div>
-              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dk-text)', letterSpacing: '-0.02em' }}>
-                Try Demo Coding Challenge
-              </div>
-              <div style={{ fontSize: '0.83rem', color: 'var(--dk-text-muted)', lineHeight: 1.6 }}>
-                Solve a real coding problem in our AI-powered IDE. Get instant feedback on complexity, correctness, and code quality.
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
-                <span className="badge badge-warning">Medium</span>
-                <span className="badge badge-primary">🐍 Python</span>
-                <span className="badge badge-cyan">🤖 AI Eval</span>
-              </div>
-              <button className="dk-btn dk-btn-primary" style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg, #a855f7, #6366f1)' }}>
-                ▶ Start Challenge
-              </button>
-            </div>
-
             {assessments.map(a => (
               <AssessmentCard key={a.id} assessment={a} navigate={navigate} />
             ))}
@@ -782,5 +860,142 @@ export default function StudentDashboard() {
         </TabsContent>
       </Tabs>
     </DarkLayout>
+  )
+}
+
+/* ─── Item 9: Readiness + next-best-actions strip ───────────────────────── */
+function ReadinessRing({ percent = 0 }) {
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)))
+  const r = 46
+  const c = 2 * Math.PI * r
+  const offset = c * (1 - clamped / 100)
+  const color = clamped >= 70 ? '#10b981' : clamped >= 45 ? '#6366f1' : '#f59e0b'
+  return (
+    <div style={{ position: 'relative', width: 'clamp(112px, 22vw, 130px)', height: 'clamp(112px, 22vw, 130px)', flexShrink: 0 }}>
+      <svg viewBox="0 0 120 120" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+        <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" />
+        <motion.circle
+          cx="60" cy="60" r={r} fill="none"
+          stroke={color} strokeWidth="10" strokeLinecap="round"
+          strokeDasharray={c}
+          initial={{ strokeDashoffset: c }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+          style={{ filter: `drop-shadow(0 0 10px ${color}66)` }}
+        />
+      </svg>
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        pointerEvents: 'none',
+      }}>
+        <div style={{ fontSize: 'clamp(1.6rem, 4vw, 1.9rem)', fontWeight: 800, color: 'var(--dk-text)', lineHeight: 1 }}>
+          {clamped}
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--dk-text-muted)', textTransform: 'uppercase', letterSpacing: 1.4, marginTop: 4 }}>
+          Readiness
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReadinessStrip({ summary, navigate }) {
+  const breakdown = summary?.readiness_breakdown || {}
+  const actions = summary?.next_actions || []
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{
+        background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(168,85,247,0.04))',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 18, padding: 'clamp(16px, 3vw, 22px)',
+        marginBottom: 22,
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr)',
+        gap: 18,
+      }}
+      className="dk-readiness-strip"
+    >
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'clamp(14px, 3vw, 22px)',
+        flexWrap: 'wrap',
+      }}>
+        <ReadinessRing percent={summary?.readiness_score} />
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: 1.6,
+            color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginBottom: 4,
+          }}>
+            Interview readiness
+          </div>
+          <h2 style={{
+            fontSize: 'clamp(1.05rem, 2.4vw, 1.3rem)', fontWeight: 800,
+            color: 'var(--dk-text)', letterSpacing: '-0.02em', marginBottom: 4,
+          }}>
+            {summary?.readiness_score >= 75
+              ? "You're nearly ready — keep the streak alive."
+              : summary?.readiness_score >= 50
+              ? 'Good momentum — close the gaps below.'
+              : 'Plenty to learn — start with one focused action.'}
+          </h2>
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 14,
+            fontSize: 12, color: 'var(--dk-text-muted)', marginTop: 8,
+          }}>
+            <div><strong style={{ color: 'var(--dk-text)' }}>{breakdown.topics_mastered_pct ?? 0}%</strong> topics done</div>
+            <div><strong style={{ color: 'var(--dk-text)' }}>{breakdown.interviews_completed ?? 0}</strong> interviews</div>
+            <div>
+              avg interview score{' '}
+              <strong style={{ color: 'var(--dk-text)' }}>
+                {breakdown.avg_interview_score == null ? '—' : `${Math.round(breakdown.avg_interview_score)}/100`}
+              </strong>
+            </div>
+            <div><strong style={{ color: 'var(--dk-text)' }}>{breakdown.weak_topics_remaining ?? 0}</strong> weak topics</div>
+          </div>
+        </div>
+      </div>
+
+      {actions.length > 0 && (
+        <div>
+          <div style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: 1.6,
+            color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginBottom: 10,
+          }}>
+            Your next best actions
+          </div>
+          <div style={{
+            display: 'grid', gap: 10,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          }}>
+            {actions.map((a, i) => (
+              <motion.button
+                key={i}
+                whileHover={{ y: -2 }}
+                onClick={() => a.href && navigate(a.href)}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  padding: '12px 14px', borderRadius: 12, textAlign: 'left',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'var(--dk-text)', cursor: 'pointer', transition: 'all 0.2s',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ fontSize: '1.05rem', flexShrink: 0 }}>{a.icon || '⚡'}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '0.86rem', fontWeight: 700, marginBottom: 3 }}>{a.label}</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--dk-text-muted)', lineHeight: 1.45 }}>{a.reason}</div>
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      )}
+    </motion.div>
   )
 }

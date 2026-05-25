@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import DarkLayout from '../components/layout/DarkLayout'
-import api from '../api/client'
+import api, { remediationApi } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 /* ─── Demo weak areas ────────────────────────────────────── */
@@ -30,6 +32,28 @@ export default function RemediationHub() {
     const [quizLoading, setQuizLoading] = useState(false)
     const [selectedAnswers, setSelectedAnswers] = useState({})
     const [showResults, setShowResults] = useState(false)
+    const [article, setArticle] = useState(null)
+    const [articleLoading, setArticleLoading] = useState(false)
+    const [articleTopic, setArticleTopic] = useState(null)
+
+    const openArticle = async (topic) => {
+        setArticleTopic(topic)
+        setArticleLoading(true)
+        setArticle(null)
+        try {
+            const res = await remediationApi.article(topic)
+            setArticle(res?.content || '')
+        } catch {
+            setArticle(`## ${topic}\n\nCould not load this article right now. Please try again in a moment.`)
+        } finally {
+            setArticleLoading(false)
+        }
+    }
+
+    const closeArticle = () => {
+        setArticleTopic(null)
+        setArticle(null)
+    }
 
     useEffect(() => {
         if (isDemoMode) {
@@ -118,8 +142,8 @@ export default function RemediationHub() {
 
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 4 }}>{area.topic}</h4>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <span style={{ fontSize: '0.68rem', color: 'var(--dk-text-muted)', marginRight: 4 }}>Frequency:</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '0.68rem', color: 'var(--dk-text-muted)' }}>Frequency:</span>
                                         {frequencyBars.map(b => (
                                             <div key={b} style={{
                                                 width: 6, height: b <= area.frequency ? 14 : 6, borderRadius: 2,
@@ -127,26 +151,125 @@ export default function RemediationHub() {
                                                 transition: 'all 0.3s ease',
                                             }} />
                                         ))}
+                                        {area.last_seen_score != null && (
+                                            <span style={{
+                                                fontSize: '0.65rem', padding: '2px 8px', borderRadius: 999,
+                                                background: 'rgba(239,68,68,0.1)', color: '#fca5a5',
+                                                border: '1px solid rgba(239,68,68,0.2)',
+                                            }}>
+                                                Last score: {Math.round(area.last_seen_score)}
+                                            </span>
+                                        )}
+                                        {(area.sources || []).slice(0, 2).map((s) => (
+                                            <span key={s} style={{
+                                                fontSize: '0.6rem', padding: '2px 6px', borderRadius: 999,
+                                                background: 'rgba(99,102,241,0.08)', color: '#a5b4fc',
+                                                border: '1px solid rgba(99,102,241,0.15)',
+                                                textTransform: 'uppercase', letterSpacing: 0.4,
+                                            }}>
+                                                {s.replace(/_/g, ' ')}
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
 
-                                <button
-                                    onClick={() => startQuiz(area.topic)}
-                                    style={{
-                                        padding: '8px 20px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                                        background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                                        color: '#fff', fontSize: '0.78rem', fontWeight: 700,
-                                        transition: 'all 0.2s ease', flexShrink: 0,
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-                                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                                >
-                                    Practice
-                                </button>
+                                <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                    <button
+                                        onClick={() => openArticle(area.topic)}
+                                        style={{
+                                            padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+                                            background: 'rgba(255,255,255,0.04)', color: 'var(--dk-text)',
+                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            fontSize: '0.75rem', fontWeight: 600, transition: 'all 0.2s',
+                                        }}
+                                    >
+                                        📖 Read article
+                                    </button>
+                                    <button
+                                        onClick={() => startQuiz(area.topic)}
+                                        style={{
+                                            padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                                            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                                            color: '#fff', fontSize: '0.75rem', fontWeight: 700,
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                    >
+                                        Take test →
+                                    </button>
+                                </div>
                             </motion.div>
                         ))}
                     </div>
                 )}
+
+                {/* Article Modal */}
+                <AnimatePresence>
+                    {articleTopic && (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            style={{
+                                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+                                backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                zIndex: 1000, padding: 24,
+                            }}
+                            onClick={closeArticle}
+                        >
+                            <motion.div
+                                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.95, opacity: 0 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    width: '100%', maxWidth: 760, maxHeight: '88vh', overflowY: 'auto',
+                                    background: 'rgba(15, 15, 25, 0.96)',
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    borderRadius: 20, padding: '28px',
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                                    <div>
+                                        <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.6 }}>
+                                            Remediation article
+                                        </div>
+                                        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--dk-text)', marginTop: 4 }}>
+                                            {articleTopic}
+                                        </h2>
+                                    </div>
+                                    <button onClick={closeArticle} style={{
+                                        background: 'none', border: 'none', color: 'var(--dk-text-muted)',
+                                        fontSize: '1.2rem', cursor: 'pointer',
+                                    }}>✕</button>
+                                </div>
+
+                                {articleLoading ? (
+                                    <div style={{ textAlign: 'center', padding: 40, color: 'var(--dk-text-muted)' }}>
+                                        <div style={{ fontSize: '2rem', marginBottom: 12 }}>📚</div>
+                                        Generating focused article on {articleTopic}…
+                                    </div>
+                                ) : (
+                                    <div className="prose prose-invert max-w-none" style={{ color: 'var(--dk-text)' }}>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{article || ''}</ReactMarkdown>
+                                    </div>
+                                )}
+
+                                <div style={{ marginTop: 18, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                                    <button onClick={closeArticle} style={{
+                                        padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+                                        background: 'rgba(255,255,255,0.04)', color: 'var(--dk-text)',
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        fontSize: '0.78rem', fontWeight: 600,
+                                    }}>Close</button>
+                                    <button onClick={() => { const t = articleTopic; closeArticle(); startQuiz(t) }} style={{
+                                        padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                                        background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                                        color: '#fff', fontSize: '0.78rem', fontWeight: 700,
+                                    }}>
+                                        Take the test →
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Micro-Quiz Modal */}
                 <AnimatePresence>

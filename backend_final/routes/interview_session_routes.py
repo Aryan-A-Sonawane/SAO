@@ -8,13 +8,17 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+import io
 
 import models
 from auth import get_current_user
 from database import get_db
 from services.interview_report_service import build_report, build_communication_analysis
+from services.interview_pdf_service import build_interview_report_pdf
 from services.skill_profile_service import upsert_score
 
 router = APIRouter(prefix="/api/interviews", tags=["Interview Sessions"])
@@ -45,6 +49,7 @@ def create_session(
         transcript=data.transcript or [],
         behavioral_stats=behavioral,
         topics_covered=data.topics_covered or [data.topic],
+        job_role=data.job_role or current_user.target_role or "",
     )
 
     overall = report.get("overall_score")
@@ -96,16 +101,20 @@ def create_session(
 def list_sessions(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    include_archived: bool = Query(False, description="Include archived sessions in the result"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     """Paginated history list (lightweight — no transcript).
     Only returns completed sessions so in-progress adaptive sessions don't
-    appear in history while still running."""
+    appear in history while still running. Archived sessions are excluded
+    unless `include_archived=true`."""
     base_filter = [
         models.InterviewSession.user_id == current_user.id,
         models.InterviewSession.status == "completed",
     ]
+    if not include_archived:
+        base_filter.append(models.InterviewSession.archived == False)  # noqa: E712
     total = (
         db.query(models.InterviewSession)
         .filter(*base_filter)
@@ -114,7 +123,13 @@ def list_sessions(
     rows = (
         db.query(models.InterviewSession)
         .filter(*base_filter)
-        .order_by(models.InterviewSession.created_at.desc())
+        .order_by(
+            # Push archived rows below active ones; within each group sort by
+            # recency. Keeps the active list cleanly on top when the user
+            # toggles "show archived" on.
+            models.InterviewSession.archived.asc(),
+            models.InterviewSession.created_at.desc(),
+        )
         .offset(offset)
         .limit(limit)
         .all()
@@ -131,10 +146,40 @@ def list_sessions(
                 "overall_score": r.overall_score,
                 "verdict": r.verdict,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
+                "archived": bool(r.archived),
             }
             for r in rows
         ],
     }
+
+
+class ArchiveRequest(BaseModel):
+    archived: bool
+
+
+@router.patch("/sessions/{session_id}/archive")
+def set_archived(
+    session_id: int,
+    data: ArchiveRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Toggle the archived flag on a session. Archived sessions are hidden
+    from the default history list but kept in the database so the user can
+    restore them later."""
+    s = (
+        db.query(models.InterviewSession)
+        .filter(
+            models.InterviewSession.id == session_id,
+            models.InterviewSession.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="Interview session not found.")
+    s.archived = bool(data.archived)
+    db.commit()
+    return {"id": s.id, "archived": bool(s.archived)}
 
 
 @router.get("/sessions/{session_id}")
@@ -168,6 +213,41 @@ def get_session(
         "verdict": s.verdict,
         "created_at": s.created_at.isoformat() if s.created_at else None,
     }
+
+
+@router.get("/sessions/{session_id}/report.pdf")
+def download_session_report_pdf(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Stream the interview report as a downloadable PDF.
+
+    Same ownership check as ``GET /sessions/{id}`` — never serves another
+    user's report. Generated on-demand (not stored on disk) so the latest
+    action plan / communication data is always reflected.
+    """
+    s = (
+        db.query(models.InterviewSession)
+        .filter(
+            models.InterviewSession.id == session_id,
+            models.InterviewSession.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="Interview session not found.")
+    try:
+        pdf_bytes = build_interview_report_pdf(s)
+    except Exception as e:  # ReportLab is the only failure path here
+        raise HTTPException(status_code=500, detail=f"Could not build PDF: {e}")
+
+    filename = f"interview_{s.id}_report.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/sessions/{session_id}")

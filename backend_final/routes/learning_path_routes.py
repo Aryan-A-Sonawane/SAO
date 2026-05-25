@@ -39,6 +39,38 @@ class SwitchRoleRequest(BaseModel):
     job_role: str
 
 
+def _topic_weight(rec) -> float:
+    """Compute a 0-1 progress weight for a single topic.
+
+    Fully completed topics score 1.0.  Topics that are in-flight accumulate
+    partial credit so the progress bar is never stuck at 0%:
+      • article read             → +0.30
+      • each quiz attempt        → up to +0.55 (scaled by best score / 100)
+      • just "in_progress" flag  → +0.10  (opened the topic at all)
+    The partial path is capped at 0.95 so the bar only reaches 100% when the
+    topic status is explicitly "completed".
+    """
+    if not rec:
+        return 0.0
+    if rec.status == "completed":
+        return 1.0
+    weight = 0.0
+    if rec.status == "in_progress":
+        weight += 0.10          # started at all
+    if rec.article_read:
+        weight += 0.30          # read the article
+    scores = rec.quiz_scores or []
+    if scores:
+        try:
+            best = max(
+                float(s.get("score", 0)) for s in scores if isinstance(s, dict)
+            )
+            weight += (best / 100.0) * 0.55   # quiz performance
+        except (ValueError, TypeError):
+            pass
+    return min(weight, 0.95)
+
+
 def _serialize_path(lp: models.LearningPath, db: Session, current_user: models.User) -> dict:
     progress_records = db.query(models.UserTopicProgress).filter(
         models.UserTopicProgress.user_id == current_user.id,
@@ -62,6 +94,16 @@ def _serialize_path(lp: models.LearningPath, db: Session, current_user: models.U
         1 for t in lp.green_topics
         if progress_map.get(t) and progress_map[t].status == "completed"
     )
+    in_progress_count = sum(
+        1 for t in lp.green_topics
+        if progress_map.get(t) and progress_map[t].status == "in_progress"
+    )
+
+    # Weighted completion: partial credit for in-flight topics so the bar is
+    # never stuck at 0% when a user has read articles or taken quiz attempts.
+    total_green = len(lp.green_topics)
+    weighted_sum = sum(_topic_weight(progress_map.get(t)) for t in lp.green_topics)
+    completion_pct = round(weighted_sum / max(1, total_green) * 100)
 
     return {
         "has_path": True,
@@ -75,11 +117,10 @@ def _serialize_path(lp: models.LearningPath, db: Session, current_user: models.U
         "time_mode": lp.time_mode,
         "company": lp.company,
         "stats": {
-            "total_green": len(lp.green_topics),
+            "total_green": total_green,
             "completed": completed,
-            "completion_pct": (
-                round(completed / len(lp.green_topics) * 100) if lp.green_topics else 0
-            ),
+            "in_progress": in_progress_count,
+            "completion_pct": completion_pct,
         },
         "last_modified": lp.last_modified,
     }

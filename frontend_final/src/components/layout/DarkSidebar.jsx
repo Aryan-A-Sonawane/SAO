@@ -4,6 +4,12 @@ import { useAuth } from '../../context/AuthContext'
 import { useLang } from '../../context/LangContext'
 import RoleSwitcher from '../RoleSwitcher'
 
+// NOTE: The language selector UI was removed from the sidebar in the pre-launch
+// polish pass (Item 8). The LangContext + `t()` helpers are still wired into
+// other pages (Assessment, Results) so we keep `useLang` imported here only
+// for `t('signOut')` etc. The user-facing language preference lives on the
+// Profile page now.
+
 function NavItem({ to, icon, label, end = false, collapsed }) {
     return (
         <NavLink
@@ -53,7 +59,7 @@ function NavItem({ to, icon, label, end = false, collapsed }) {
 
 export default function DarkSidebar({ isOpen, onToggle }) {
     const { user, logout, isDemoMode, exitDemoMode } = useAuth()
-    const { lang, setLang, t } = useLang()
+    const { t } = useLang()
     const navigate = useNavigate()
     const collapsed = !isOpen
 
@@ -62,12 +68,6 @@ export default function DarkSidebar({ isOpen, onToggle }) {
         else logout()
         navigate('/')
     }
-
-    const langOptions = [
-        { code: 'en', label: 'EN', flag: '🇺🇸' },
-        { code: 'hi', label: 'HI', flag: '🇮🇳' },
-        { code: 'mr', label: 'MR', flag: '🏛️' },
-    ]
 
     return (
         <aside
@@ -198,7 +198,6 @@ export default function DarkSidebar({ isOpen, onToggle }) {
                         <NavItem to="/interview" icon="🎙️" label="Mock Interview" collapsed={collapsed} />
                         <NavItem to="/interviews" icon="🗂️" label="Interview History" collapsed={collapsed} />
                         <NavItem to="/remediation" icon="🩹" label="Remediation" collapsed={collapsed} />
-                        <NavItem to="/demo/coding" icon="💻" label="Demo Challenge" collapsed={collapsed} />
                         <NavItem to="/profile" icon="👤" label="Profile" collapsed={collapsed} />
                     </>
                 )}
@@ -233,33 +232,8 @@ export default function DarkSidebar({ isOpen, onToggle }) {
                 )}
             </nav>
 
-            {/* Language selector + sign out */}
+            {/* Sign out */}
             <div style={{ padding: collapsed ? '12px 0' : '12px 8px', borderTop: '1px solid var(--dk-border)', marginTop: 12 }}>
-                {!collapsed && (
-                    <>
-                        <div style={{ fontSize: '0.68rem', color: 'var(--dk-text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                            {t('language')}
-                        </div>
-                        <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
-                            {langOptions.map(opt => (
-                                <button
-                                    key={opt.code}
-                                    onClick={() => setLang(opt.code)}
-                                    style={{
-                                        flex: 1, padding: '6px 4px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                                        fontSize: '0.7rem', fontWeight: 700, transition: 'all 0.2s',
-                                        background: lang === opt.code ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.04)',
-                                        color: lang === opt.code ? 'var(--dk-primary-light)' : 'var(--dk-text-muted)',
-                                        letterSpacing: '-0.01em',
-                                    }}
-                                >
-                                    {opt.flag} {opt.label}
-                                </button>
-                            ))}
-                        </div>
-                    </>
-                )}
-
                 <button
                     onClick={handleLogout}
                     title={isDemoMode ? 'Exit Demo' : t('signOut')}

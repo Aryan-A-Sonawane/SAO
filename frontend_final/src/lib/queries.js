@@ -7,6 +7,7 @@ import {
   diagnosticApi,
   interviewSessionsApi,
   skillProfileApi,
+  userApi,
 } from '@/api/client'
 
 export const qk = {
@@ -20,9 +21,12 @@ export const qk = {
   companies: ['companies'],
   companyInsights: (slug, role) => ['company', slug, role],
   diagnosticSession: (id) => ['diagnostic', 'session', id],
-  interviewHistory: ({ limit = 20, offset = 0 } = {}) => ['interviews', 'sessions', { limit, offset }],
+  interviewHistory: ({ limit = 20, offset = 0, includeArchived = false } = {}) =>
+    ['interviews', 'sessions', { limit, offset, includeArchived }],
   interviewReport: (id) => ['interviews', 'sessions', id],
   skillProfile: ['users', 'skill-profile'],
+  dashboardSummary: ['users', 'dashboard-summary'],
+  activityInsights: ['users', 'activity-insights'],
 }
 
 // ─── Onboarding ─────────────────────────────────────────────────────────
@@ -101,7 +105,31 @@ export function useSwitchRole() {
       qc.invalidateQueries({ queryKey: ['learning-path'] })
       qc.invalidateQueries({ queryKey: ['onboarding'] })
       qc.invalidateQueries({ queryKey: qk.skillProfile })
+      // Readiness ring and activity stats are role-scoped — re-fetch them.
+      qc.invalidateQueries({ queryKey: qk.dashboardSummary })
+      qc.invalidateQueries({ queryKey: qk.activityInsights })
     },
+  })
+}
+
+// ─── Dashboard / Activity Insights ─────────────────────────────────────
+/** Consolidated readiness + next-action payload. Reactive to role switches. */
+export function useDashboardSummary(opts = {}) {
+  return useQuery({
+    queryKey: qk.dashboardSummary,
+    queryFn: userApi.dashboardSummary,
+    staleTime: 60 * 1000, // 1 minute
+    ...opts,
+  })
+}
+
+/** Gemini-generated activity insights — lazy-loaded, non-blocking. */
+export function useActivityInsights(opts = {}) {
+  return useQuery({
+    queryKey: qk.activityInsights,
+    queryFn: userApi.activityInsights,
+    staleTime: 5 * 60 * 1000, // 5 minutes — insights don't need to be instant
+    ...opts,
   })
 }
 

@@ -7,6 +7,7 @@ import api, { interviewSessionsApi } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { DEMO_INTERVIEW_TOPICS } from '../data/demoData'
 import Proctor from '../components/Proctor'
+import { downloadInterviewReportPDF } from '../lib/downloadFile'
 
 /* ─── Typing indicator dots ──────────────────────────────────────────────── */
 function TypingIndicator() {
@@ -533,12 +534,12 @@ export default function InterviewCoach() {
                         <p style={{ fontSize: '0.84rem', color: 'var(--dk-text-muted)', lineHeight: 1.7 }}>{evaluation.detailed_feedback}</p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                         <button
                             onClick={resetInterview}
                             className="dk-btn"
                             style={{
-                                flex: 1, justifyContent: 'center',
+                                flex: '1 1 160px', justifyContent: 'center',
                                 background: 'rgba(255,255,255,0.04)',
                                 border: '1px solid rgba(255,255,255,0.08)',
                                 color: 'var(--dk-text)',
@@ -551,7 +552,7 @@ export default function InterviewCoach() {
                             disabled={!savedSessionId || savingSession}
                             className="dk-btn dk-btn-primary"
                             style={{
-                                flex: 1,
+                                flex: '1 1 160px',
                                 justifyContent: 'center',
                                 background: savedSessionId
                                     ? 'linear-gradient(135deg, #6366f1, #a855f7)'
@@ -560,6 +561,29 @@ export default function InterviewCoach() {
                             }}
                         >
                             {savingSession ? 'Saving…' : '📊 View Full Report'}
+                        </button>
+                        <button
+                            onClick={async () => {
+                                if (!savedSessionId) return
+                                try {
+                                    await downloadInterviewReportPDF(savedSessionId)
+                                    toast.success('Report downloaded')
+                                } catch {
+                                    toast.error('Could not download report')
+                                }
+                            }}
+                            disabled={!savedSessionId || savingSession}
+                            className="dk-btn"
+                            style={{
+                                flex: '1 1 160px',
+                                justifyContent: 'center',
+                                background: 'rgba(255,255,255,0.04)',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                color: 'var(--dk-text)',
+                                opacity: savedSessionId ? 1 : 0.6,
+                            }}
+                        >
+                            ⬇ Download PDF
                         </button>
                     </div>
                     {!isDemoMode && !savedSessionId && !savingSession && (

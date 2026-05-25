@@ -19,7 +19,6 @@ const TakeAssessment      = lazy(() => import('./pages/TakeAssessment'))
 const AssessmentResult    = lazy(() => import('./pages/AssessmentResult'))
 const Profile             = lazy(() => import('./pages/Profile'))
 const CodingSkills        = lazy(() => import('./pages/CodingSkills'))
-const DemoCodingChallenge = lazy(() => import('./pages/DemoCodingChallenge'))
 const InterviewAdaptive   = lazy(() => import('./pages/InterviewAdaptive'))
 const Tracks              = lazy(() => import('./pages/Tracks'))
 const RemediationHub      = lazy(() => import('./pages/RemediationHub'))
@@ -146,12 +145,6 @@ function AppRoutes() {
           element={<ProtectedRoute adminOnly><CodingSkills /></ProtectedRoute>}
         />
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-
-        {/* Demo coding challenge */}
-        <Route
-          path="/demo/coding"
-          element={<ProtectedRoute><DemoCodingChallenge /></ProtectedRoute>}
-        />
 
         {/* Adaptive Mock Interview */}
         <Route

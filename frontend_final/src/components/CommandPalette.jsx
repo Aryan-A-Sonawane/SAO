@@ -87,9 +87,6 @@ export default function CommandPalette() {
           <CommandItem onSelect={() => go('/interviews')}>
             <History className="mr-2 h-4 w-4" /> Past interviews
           </CommandItem>
-          <CommandItem onSelect={() => go('/demo/coding')}>
-            <Wand2 className="mr-2 h-4 w-4" /> Demo coding challenge
-          </CommandItem>
           <CommandItem onSelect={() => go('/portfolio')}>
             <Trophy className="mr-2 h-4 w-4" /> My portfolio
           </CommandItem>

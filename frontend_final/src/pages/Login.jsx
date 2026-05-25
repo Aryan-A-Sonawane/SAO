@@ -51,7 +51,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const { login, enterDemoMode } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
   const mouse = useMousePosition()
   const mouseRef = useRef({ nX: 0, nY: 0 })
@@ -111,19 +111,6 @@ export default function Login() {
     }
   }
 
-  const demoLogin = (role) => {
-    setEmail(role === 'admin' ? 'admin@interviewvault.ai' : 'student@interviewvault.ai')
-    setPassword(role === 'admin' ? 'admin123' : 'student123')
-  }
-
-  const handleDemoMode = (role) => {
-    const user = enterDemoMode(role)
-    setShowSuccess(true)
-    setTimeout(() => {
-      navigate(user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard')
-    }, 500)
-  }
-
   return (
     <div className="auth-vault">
       {/* WebGL particle canvas — immersive background */}
@@ -152,16 +139,6 @@ export default function Login() {
 
         {/* Glassmorphic card */}
         <div className={`auth-card ${showSuccess ? 'auth-success-flash' : ''}`}>
-          {/* Demo access buttons */}
-          <div className="auth-demo-row">
-            <button onClick={() => demoLogin('admin')} className="auth-demo-btn" type="button">
-              👑 Demo Admin
-            </button>
-            <button onClick={() => demoLogin('student')} className="auth-demo-btn" type="button">
-              🎓 Demo Student
-            </button>
-          </div>
-
           <form onSubmit={handleSubmit} className="auth-form">
             {error && (
               <div className="auth-error">
@@ -219,92 +196,6 @@ export default function Login() {
               )}
             </button>
           </form>
-
-          {/* Separator */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            margin: '24px 0 16px',
-            opacity: 0,
-            animation: 'auth-field-stagger 0.5s cubic-bezier(0.16,1,0.3,1) 0.85s both',
-          }}>
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-            <span style={{ fontSize: '0.72rem', color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              or explore
-            </span>
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-          </div>
-
-          {/* Demo mode buttons */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
-            opacity: 0,
-            animation: 'auth-field-stagger 0.5s cubic-bezier(0.16,1,0.3,1) 0.9s both',
-          }}>
-            <button
-              onClick={() => handleDemoMode('admin')}
-              type="button"
-              style={{
-                padding: '11px 14px',
-                borderRadius: 12,
-                border: '1px solid rgba(99,102,241,0.2)',
-                background: 'rgba(99,102,241,0.06)',
-                color: '#818cf8',
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.25s ease',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(99,102,241,0.12)'
-                e.currentTarget.style.borderColor = 'rgba(99,102,241,0.4)'
-                e.currentTarget.style.transform = 'translateY(-1px)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(99,102,241,0.06)'
-                e.currentTarget.style.borderColor = 'rgba(99,102,241,0.2)'
-                e.currentTarget.style.transform = 'translateY(0)'
-              }}
-            >
-              🚀 Demo Admin
-            </button>
-            <button
-              onClick={() => handleDemoMode('student')}
-              type="button"
-              style={{
-                padding: '11px 14px',
-                borderRadius: 12,
-                border: '1px solid rgba(168,85,247,0.2)',
-                background: 'rgba(168,85,247,0.06)',
-                color: '#c084fc',
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.25s ease',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(168,85,247,0.12)'
-                e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'
-                e.currentTarget.style.transform = 'translateY(-1px)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(168,85,247,0.06)'
-                e.currentTarget.style.borderColor = 'rgba(168,85,247,0.2)'
-                e.currentTarget.style.transform = 'translateY(0)'
-              }}
-            >
-              🎓 Demo Student
-            </button>
-          </div>
 
           <div className="auth-footer">
             No account?{' '}

@@ -1,23 +1,32 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import toast from 'react-hot-toast'
 import {
   Activity,
   AlertTriangle,
   ArrowLeft,
   BadgeCheck,
+  BookOpen,
   CheckCircle2,
   Clock,
+  Download,
   Eye,
   Gauge,
+  Lightbulb,
+  Link as LinkIcon,
+  ListChecks,
+  Loader2,
   MessageSquare,
   Mic,
   Quote,
   Shield,
   Sparkles,
+  Target,
   TrendingUp,
   UserCheck,
 } from 'lucide-react'
+import { downloadInterviewReportPDF } from '@/lib/downloadFile'
 import {
   Bar,
   BarChart,
@@ -56,12 +65,27 @@ export default function InterviewReport() {
   const { interviewId } = useParams()
   const navigate = useNavigate()
   const { data, isLoading, isError } = useInterviewReport(interviewId)
+  const [downloading, setDownloading] = useState(false)
 
   const session = data
   const report = session?.report || {}
   const comm = report.communication || {}
   const language = comm.language || {}
   const behavioral = session?.behavioral_stats || {}
+  const actionPlan = report.action_plan || {}
+
+  const handleDownloadPDF = async () => {
+    if (!session?.id) return
+    setDownloading(true)
+    try {
+      await downloadInterviewReportPDF(session.id)
+      toast.success('Report downloaded')
+    } catch (e) {
+      toast.error('Could not download report. Try again.')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const categoryData = useMemo(() => {
     const cs = report.category_scores || {}
@@ -172,12 +196,29 @@ export default function InterviewReport() {
             </div>
           </div>
 
-          <ScoreOrb score={overall} verdict={verdict} />
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+              className="border-border/60 bg-card/40"
+            >
+              {downloading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {downloading ? 'Building PDF…' : 'Download PDF'}
+            </Button>
+            <ScoreOrb score={overall} verdict={verdict} />
+          </div>
         </motion.div>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex w-full flex-wrap gap-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="action-plan">Action plan</TabsTrigger>
             <TabsTrigger value="body-language">Body Language</TabsTrigger>
             <TabsTrigger value="communication">Communication</TabsTrigger>
             <TabsTrigger value="transcript">Transcript</TabsTrigger>
@@ -350,6 +391,11 @@ export default function InterviewReport() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* ── Action Plan Tab ── */}
+          <TabsContent value="action-plan" className="space-y-4">
+            <ActionPlanSection plan={actionPlan} onDownloadPDF={handleDownloadPDF} downloading={downloading} />
           </TabsContent>
 
           {/* ── Body Language Tab ── */}
@@ -623,6 +669,209 @@ export default function InterviewReport() {
         )}
       </div>
     </DarkLayout>
+  )
+}
+
+function PriorityChip({ priority }) {
+  const p = (priority || 'medium').toLowerCase()
+  const styles = {
+    high: 'bg-red-500/15 text-red-300 border-red-500/30',
+    medium: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    low: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  }[p] || 'bg-muted/40 text-muted-foreground border-border/40'
+  return (
+    <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider', styles)}>
+      {p}
+    </span>
+  )
+}
+
+function ImprovementCard({ item, index }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.04 * index }}
+      className="flex flex-col gap-2 rounded-xl border border-border/40 bg-card/40 p-4 backdrop-blur-xl"
+    >
+      <div className="flex items-center gap-2">
+        <PriorityChip priority={item.priority} />
+        <span className="text-sm font-semibold text-foreground">{item.area}</span>
+      </div>
+      <div className="flex items-start gap-2 text-sm text-muted-foreground">
+        <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+        <span>{item.concrete_step}</span>
+      </div>
+    </motion.div>
+  )
+}
+
+function ActionPlanSection({ plan, onDownloadPDF, downloading }) {
+  const expected = plan?.what_interviewer_expected || []
+  const delivered = plan?.what_you_delivered || []
+  const tech = plan?.technical_improvements || []
+  const nonTech = plan?.non_technical_improvements || []
+  const week = plan?.next_7_day_plan || []
+  const resources = plan?.recommended_resources || []
+  const isEmpty = !expected.length && !delivered.length && !tech.length && !nonTech.length && !week.length
+
+  if (isEmpty) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+          <Lightbulb className="h-10 w-10 text-muted-foreground" />
+          <p className="text-sm font-medium text-foreground">Action plan still cooking…</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            We couldn’t generate a prescriptive next-step plan for this session. The PDF still bundles
+            scores, communication, and transcript — go ahead and download it.
+          </p>
+          <Button variant="outline" size="sm" onClick={onDownloadPDF} disabled={downloading}>
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Download report
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* What was expected vs what you delivered */}
+      {(expected.length > 0 || delivered.length > 0) && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-indigo-300">
+                <ListChecks className="h-4 w-4" /> What was expected
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5 text-sm text-muted-foreground">
+              {expected.length === 0 && <p>No expectations breakdown available.</p>}
+              {expected.map((line, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="text-indigo-400">·</span>
+                  <span>{line}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+                <CheckCircle2 className="h-4 w-4" /> What you delivered
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5 text-sm text-muted-foreground">
+              {delivered.length === 0 && <p>No delivery snapshot available.</p>}
+              {delivered.map((line, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="text-emerald-400">·</span>
+                  <span>{line}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Technical improvements */}
+      {tech.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <Target className="h-4 w-4 text-primary" /> Technical improvements
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {tech.map((item, i) => <ImprovementCard key={i} item={item} index={i} />)}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Non-technical improvements */}
+      {nonTech.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <Sparkles className="h-4 w-4 text-primary" /> Non-technical improvements
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {nonTech.map((item, i) => <ImprovementCard key={i} item={item} index={i} />)}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 7-day plan as timeline */}
+      {week.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <Clock className="h-4 w-4 text-primary" /> Your next 7 days
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ol className="relative space-y-3 border-l border-border/40 pl-5">
+              {week.map((line, i) => (
+                <motion.li
+                  key={i}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.05 * i }}
+                  className="relative text-sm leading-relaxed text-muted-foreground"
+                >
+                  <span className="absolute -left-[26px] top-1 grid h-4 w-4 place-items-center rounded-full bg-primary text-[10px] font-bold text-white">
+                    {i + 1}
+                  </span>
+                  {line}
+                </motion.li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recommended resources */}
+      {resources.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <BookOpen className="h-4 w-4 text-primary" /> Recommended resources
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {resources.map((r, i) => {
+              const body = (
+                <div className="flex items-center gap-3 rounded-lg border border-border/40 bg-card/30 px-3 py-2 transition-colors hover:border-primary/40">
+                  <LinkIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-foreground">{r.title}</div>
+                    {r.kind && (
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{r.kind}</div>
+                    )}
+                  </div>
+                </div>
+              )
+              return r.url ? (
+                <a key={i} href={r.url} target="_blank" rel="noreferrer">{body}</a>
+              ) : (
+                <div key={i}>{body}</div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      <Button
+        onClick={onDownloadPDF}
+        disabled={downloading}
+        variant="default"
+        className="w-full sm:w-auto"
+      >
+        {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+        Export full report as PDF
+      </Button>
+    </div>
   )
 }
 

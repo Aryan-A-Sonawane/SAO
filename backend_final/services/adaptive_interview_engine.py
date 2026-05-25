@@ -374,6 +374,12 @@ GUIDELINES:
   - The question should require diagram or pseudocode IF AND ONLY IF the topic
     naturally demands it (e.g. system design, DSA at intermediate+). Set
     requires_diagram accordingly.
+  - The question should require WRITING CODE if the role + topic invites it
+    (DSA, algorithms, debugging, small-scale implementation). When that's the
+    case set requires_code=true AND include a `code_template` field with a
+    minimal starter (function signature only) in the appropriate language.
+    Mix coding and non-coding questions naturally across the interview — do
+    NOT make every question a coding question.
 
 Respond with JSON ONLY:
 {{
@@ -382,6 +388,9 @@ Respond with JSON ONLY:
   "topic": "{topic}",
   "difficulty": "{difficulty}",
   "requires_diagram": <true/false>,
+  "requires_code": <true/false>,
+  "code_template": "starter snippet if requires_code, else empty string",
+  "code_language": "python|javascript|java|cpp|go|sql (only if requires_code)",
   "ideal_answer_outline": "1-2 sentence sketch of what a strong answer covers"
 }}"""
 
@@ -396,6 +405,9 @@ Respond with JSON ONLY:
             "topic": topic,
             "difficulty": difficulty,
             "requires_diagram": False,
+            "requires_code": False,
+            "code_template": "",
+            "code_language": "",
             "ideal_answer_outline": "Definition + 1 real example",
         }
 
@@ -404,6 +416,24 @@ Respond with JSON ONLY:
     parsed.setdefault("topic", topic)
     parsed.setdefault("difficulty", difficulty)
     parsed.setdefault("requires_diagram", False)
+    # Only roles that actually code get coding questions; for others, force
+    # off so we don't surface the Code panel inappropriately.
+    coding_roles = {
+        "software_engineer", "frontend_developer", "backend_developer",
+        "fullstack_developer", "data_scientist", "ml_engineer",
+        "gen_ai_engineer", "data_engineer", "data_analyst",
+        "ios_developer", "android_developer", "qa_automation",
+        "embedded_engineer", "blockchain_developer", "site_reliability_engineer",
+        "devops_engineer", "security_engineer",
+    }
+    if (role or "") not in coding_roles:
+        parsed["requires_code"] = False
+        parsed["code_template"] = ""
+        parsed["code_language"] = ""
+    else:
+        parsed.setdefault("requires_code", False)
+        parsed.setdefault("code_template", "")
+        parsed.setdefault("code_language", "python")
     return parsed
 
 
@@ -596,6 +626,9 @@ def start_interview_session(
             "topic": first_q["topic"],
             "difficulty": first_q["difficulty"],
             "requires_diagram": first_q.get("requires_diagram", False),
+            "requires_code": first_q.get("requires_code", False),
+            "code_template": first_q.get("code_template", ""),
+            "code_language": first_q.get("code_language", "python"),
         },
         "progress": _build_progress_snapshot(state),
     }
@@ -901,6 +934,9 @@ def _apply_judgment_and_transition(
                 "difficulty": next_q.get("difficulty"),
                 "type": next_q.get("type"),
                 "requires_diagram": next_q.get("requires_diagram", False),
+                "requires_code": next_q.get("requires_code", False),
+                "code_template": next_q.get("code_template", ""),
+                "code_language": next_q.get("code_language", "python"),
             } if next_q else None
         ),
         "end_reason": end_reason,
@@ -936,6 +972,7 @@ def _attach_report_to_session(
         transcript=transcript,
         behavioral_stats=session.behavioral_stats or {},
         topics_covered=topics_covered,
+        job_role=job_role,
     )
 
     session.report = report

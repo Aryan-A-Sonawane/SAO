@@ -814,3 +814,62 @@
   .lp-hero-title { font-size: 2.5rem; }
   .lp-stats-strip { gap: 24px; }
 }
+
+/* ─── New Landing 2.0 keyframes ─────────────────────────────────────────── */
+@keyframes iv-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.6; transform: scale(0.85); }
+}
+
+@keyframes iv-wave {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes iv-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes iv-speak-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Feature bento — responsive grid */
+@media (max-width: 1100px) {
+  /* force all feature cards to full width on tablet */
+  [style*="grid-column: span 7"],
+  [style*="grid-column: span 5"],
+  [style*="grid-column: span 4"] {
+    grid-column: span 12 !important;
+  }
+}
+
+/* Hero split → stack on mobile */
+@media (max-width: 900px) {
+  /* hero section becomes single column */
+  section[style*="gap: 80px"] {
+    flex-direction: column !important;
+    gap: 48px !important;
+    padding: 100px 24px 60px !important;
+  }
+  /* mockup takes full width */
+  section[style*="gap: 80px"] > div:last-child {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  /* how-it-works grid → 1 col */
+  section[id="how-it-works"] > div:last-child {
+    grid-template-columns: 1fr !important;
+  }
+  /* company intel → 1 col */
+  section[id="company-prep"] > div {
+    grid-template-columns: 1fr !important;
+    gap: 32px !important;
+  }
+  /* scorecard → 1 col */
+  section > div[style*="grid-template-columns: repeat(2, 1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+}

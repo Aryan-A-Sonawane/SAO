@@ -221,10 +221,20 @@ class LearningPath(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     job_role = Column(String(100), nullable=False)
+    # Display title — derived from STANDARD_PATHS for canonical roles, or the
+    # name the user entered when creating a custom JD-driven role.
+    role_title = Column(String(200), default="")
     green_topics = Column(JSON, default=list)   # ordered, committed topics
     yellow_topics = Column(JSON, default=list)  # optional/extended topics
     time_mode = Column(String(20), nullable=True)  # 24h/1w/1m/3m/6m
     company = Column(String(200), nullable=True)
+    # Where this path came from: "standard" (predefined catalog) | "jd"
+    # (user uploaded a job description) | "diagnostic" (auto-built from
+    # diagnostic test). Drives the "Custom" badge in the UI.
+    source = Column(String(20), default="standard")
+    # Raw JD text retained for custom roles so the interview engine and
+    # learning hub can re-ground prompts in the original posting.
+    jd_text = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     last_modified = Column(DateTime, default=datetime.utcnow)
 
@@ -320,5 +330,11 @@ class InterviewSession(Base):
     state = Column(JSON, default=dict)
     target_duration_minutes = Column(Integer, default=30)
     ended_at = Column(DateTime, nullable=True)
+
+    # Archive flag — lets users hide old sessions from history without deleting
+    # them. The list endpoint excludes archived rows by default; passing
+    # `include_archived=true` returns them with `archived: true` on each row so
+    # the UI can grey them out.
+    archived = Column(Boolean, default=False, nullable=False)
 
     user = relationship("User", foreign_keys=[user_id])

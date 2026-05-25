@@ -1542,3 +1542,275 @@
 .dark-app [class*="border-l-amber-500"] {
     border-left: 3px solid #f59e0b !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — ≤ 768 px  (Android & iOS vertical screens)
+   Pairs with MobileNav.jsx bottom tab bar + DarkLayout safe-area padding
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+    /* ── Base card overrides ─────────────────────────────────────────── */
+    .dark-app .dk-card {
+        border-radius: 14px !important;
+        padding: 16px !important;
+    }
+
+    .dark-app .dk-stat-card {
+        padding: 14px 16px !important;
+        border-radius: 14px !important;
+    }
+
+    .dark-app .dk-eval-skeleton {
+        padding: 20px 16px !important;
+    }
+
+    /* ── Toast: keep above bottom nav (72px) + safe area ─────────────── */
+    .dark-app .dk-toast {
+        left: 12px !important;
+        right: 12px !important;
+        bottom: calc(72px + env(safe-area-inset-bottom, 0px) + 12px) !important;
+        font-size: 0.82rem !important;
+    }
+
+    /* ── Section / page headings ────────────────────────────────────── */
+    .dark-app .dk-page-title,
+    .dark-app [class*="dk-heading"],
+    .dark-app h1.text-3xl,
+    .dark-app h1.text-4xl {
+        font-size: 1.5rem !important;
+        line-height: 1.25 !important;
+    }
+
+    .dark-app h2.text-2xl,
+    .dark-app h2.text-xl {
+        font-size: 1.2rem !important;
+    }
+
+    /* ── Multi-column stat grids → single column ─────────────────────── */
+    .dark-app .dk-stat-grid,
+    .dark-app [class*="grid-cols-4"],
+    .dark-app [class*="grid-cols-3"],
+    .dark-app [class*="grid-cols-2"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Two-column grids can stay 2-col if items are narrow enough */
+    .dark-app .dk-two-col {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* ── Tabs: scrollable horizontal strip ───────────────────────────── */
+    .dark-app .dk-tabs,
+    .dark-app .dk-glass-tabs-list,
+    .dark-app [role="tablist"] {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        flex-wrap: nowrap !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        padding-bottom: 2px !important;
+    }
+
+    .dark-app .dk-tabs::-webkit-scrollbar,
+    .dark-app .dk-glass-tabs-list::-webkit-scrollbar,
+    .dark-app [role="tablist"]::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .dark-app .dk-glass-tabs-trigger,
+    .dark-app [role="tab"] {
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+        padding: 8px 14px !important;
+        font-size: 0.78rem !important;
+        min-height: 44px !important;   /* touch target */
+    }
+
+    /* ── Buttons: touch-friendly minimum height ──────────────────────── */
+    .dark-app button,
+    .dark-app .dk-glass-btn,
+    .dark-app [role="button"] {
+        min-height: 44px !important;
+    }
+
+    /* Small icon-only buttons may stay compact */
+    .dark-app button[aria-label],
+    .dark-app .dk-icon-btn {
+        min-height: 36px !important;
+        min-width: 36px !important;
+    }
+
+    /* ── Inputs & textareas: larger tap area ─────────────────────────── */
+    .dark-app .dk-glass-input,
+    .dark-app .dk-glass-textarea,
+    .dark-app input[type="text"],
+    .dark-app input[type="email"],
+    .dark-app input[type="password"],
+    .dark-app textarea {
+        min-height: 44px !important;
+        font-size: 1rem !important;    /* prevents iOS auto-zoom on focus */
+        padding: 12px 14px !important;
+    }
+
+    .dark-app .dk-glass-textarea,
+    .dark-app textarea {
+        min-height: 88px !important;
+    }
+
+    /* ── Sidebar should never appear on mobile ───────────────────────── */
+    .dark-app .dk-sidebar {
+        display: none !important;
+    }
+
+    /* ── Flex layouts: stack vertically ─────────────────────────────── */
+    .dark-app .dk-header-row,
+    .dark-app .dk-flex-row-mobile-stack {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+
+    /* ── Dashboard stat numbers: smaller on mobile ───────────────────── */
+    .dark-app .dk-stat-value,
+    .dark-app [class*="text-4xl"],
+    .dark-app [class*="text-5xl"] {
+        font-size: 2rem !important;
+    }
+
+    /* ── Chart containers: full width, reduced height ────────────────── */
+    .dark-app .recharts-wrapper,
+    .dark-app [class*="recharts"] {
+        width: 100% !important;
+    }
+
+    .dark-app .dk-chart-container {
+        height: 220px !important;
+    }
+
+    /* ── Interview page: hide non-essential panels ───────────────────── */
+    .dark-app .dk-interview-sidebar-panel {
+        display: none !important;
+    }
+
+    /* ── Learning path builder: stack columns ────────────────────────── */
+    .dark-app .dk-path-columns {
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+
+    .dark-app .dk-path-column {
+        width: 100% !important;
+        max-height: 50vh !important;
+        overflow-y: auto !important;
+    }
+
+    /* ── Modal / Dialog: full-width with top margin ──────────────────── */
+    .dark-app .dk-glass-dialog,
+    .dk-glass-dialog {
+        border-radius: 20px 20px 0 0 !important;
+        margin: 0 !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-height: 90dvh !important;
+        overflow-y: auto !important;
+        padding: 20px 16px !important;
+    }
+
+    /* ── Scrollbar: hide thin scrollbar on mobile (redundant visual noise) */
+    .dark-app *::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
+    }
+
+    /* ── Hover-only affordances: no-op on touch ──────────────────────── */
+    @media (hover: none) {
+        .dark-app .dk-card:hover,
+        .dark-app .dk-stat-card:hover,
+        .dark-app [class*="hover:scale"],
+        .dark-app [class*="hover:shadow"] {
+            transform: none !important;
+            box-shadow: inherit !important;
+        }
+
+        /* Spotlight mouse-tracking overlay irrelevant on touch */
+        .dark-app .dk-spotlight {
+            display: none !important;
+        }
+    }
+
+    /* ── Prose (article) typography: readable on small screens ──────── */
+    .dark-app .prose {
+        font-size: 0.92rem !important;
+    }
+
+    .dark-app .prose pre {
+        overflow-x: auto !important;
+        padding: 14px 12px !important;
+        font-size: 0.78rem !important;
+    }
+
+    .dark-app .prose table {
+        display: block !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    /* ── Admin / coding-skills page grid ─────────────────────────────── */
+    .dark-app .dk-coding-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* ── Profile page: center avatar, stack info ─────────────────────── */
+    .dark-app .dk-profile-header {
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center !important;
+        gap: 16px !important;
+    }
+
+    /* ── History / past-interviews list ─────────────────────────────── */
+    .dark-app .dk-history-row {
+        flex-direction: column !important;
+        gap: 8px !important;
+        align-items: flex-start !important;
+    }
+
+    /* ── Onboarding stepper: compress step indicators ─────────────────── */
+    .dark-app .dk-stepper-label {
+        display: none !important;
+    }
+
+    .dark-app .dk-stepper-dot {
+        width: 10px !important;
+        height: 10px !important;
+    }
+
+    /* ── WebGL canvas: always full-bleed ─────────────────────────────── */
+    .dark-app canvas {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+    }
+}
+
+/* ── Extra-small screens (< 380 px — very narrow Android) ────────────────── */
+@media (max-width: 380px) {
+    .dark-app .dk-card {
+        padding: 12px !important;
+    }
+
+    .dark-app h1,
+    .dark-app .dk-page-title {
+        font-size: 1.3rem !important;
+    }
+
+    .dark-app .dk-glass-tabs-trigger,
+    .dark-app [role="tab"] {
+        padding: 7px 10px !important;
+        font-size: 0.72rem !important;
+    }
+}

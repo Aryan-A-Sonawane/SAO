@@ -248,3 +248,122 @@ def end_manually(
         session=session,
         behavioral_stats=data.behavioral_stats,
     )
+
+
+# ─── JD-aware interview (Item 3) ─────────────────────────────────────────────
+
+class StartFromJDRequest(BaseModel):
+    """Start a JD-aware interview using a free-form Job Description.
+
+    The frontend uploads a JD via the existing /onboarding/upload-jd endpoint
+    which returns a parsed blueprint (green_topics, yellow_topics, jd_text);
+    those values are passed straight to this endpoint so we don't re-parse.
+    The JD text itself is stashed on InterviewSession.state.jd_context so the
+    engine can ground questions in it.
+    """
+    jd_text: str = Field(..., min_length=80)
+    role_title: Optional[str] = "Custom JD Role"
+    target_duration_minutes: int = Field(30, ge=5, le=90)
+    green_topics: List[str] = Field(..., min_length=1)
+    yellow_topics: List[str] = Field(default_factory=list)
+    focus_areas: List[str] = Field(default_factory=list)
+
+
+# ─── Item 7: LLM-analysed code panel ─────────────────────────────────────────
+
+class AnalyzeCodeRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=20000)
+    language: str = Field("python", description="python|javascript|java|cpp|go|sql|typescript")
+    question_context: str = Field("", description="The question being answered (for grounding)")
+
+
+@router.post("/{session_id}/analyze-code")
+def analyze_code(
+    session_id: int,
+    data: AnalyzeCodeRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Analyse a candidate's code snippet with Gemini — no compiler.
+
+    Returns simulated output, structured issues, complexity, and one
+    improvement. The snippet is also appended to the live interview transcript
+    as a candidate turn (content_type='code') so the interviewer agent can
+    react to it on the very next question.
+    """
+    session = _load_session_or_404(session_id, db, current_user)
+    if session.status != "in_progress":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot analyse code — session is '{session.status}'.",
+        )
+    from services.code_analysis_service import analyze_candidate_code
+
+    result = analyze_candidate_code(
+        code=data.code,
+        language=data.language,
+        question_context=data.question_context,
+    )
+
+    # Persist as a transcript turn so the interviewer agent can reference it.
+    transcript = list(session.transcript or [])
+    transcript.append({
+        "role": "candidate",
+        "content_type": "code",
+        "language": data.language,
+        "content": data.code,
+        "analysis": result,
+    })
+    session.transcript = transcript
+    db.commit()
+
+    return result
+
+
+@router.post("/start-from-jd")
+def start_from_jd(
+    data: StartFromJDRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Start an adaptive interview keyed off a Job Description.
+
+    Internally we delegate to ``start_interview_session`` with
+    ``mode='company_specific'`` and the JD's green_topics as ``topics_override``,
+    then stamp the JD text into session.state so the question generator can
+    reference it. The session is persisted with ``mode='jd_specific'`` for
+    history filtering.
+    """
+    try:
+        result = start_interview_session(
+            db=db,
+            user=current_user,
+            mode="company_specific",
+            target_duration_minutes=data.target_duration_minutes,
+            job_role=current_user.target_role or "custom",
+            company=(data.role_title or "Custom JD Role")[:200],
+            topics_override=data.green_topics,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Stamp the JD context onto the session so subsequent questions can use it.
+    session_id = result.get("session_id") or result.get("id")
+    if session_id:
+        s = (
+            db.query(models.InterviewSession)
+            .filter(models.InterviewSession.id == session_id)
+            .first()
+        )
+        if s:
+            state = dict(s.state or {})
+            state["jd_context"] = {
+                "jd_text": (data.jd_text or "")[:8000],
+                "role_title": data.role_title,
+                "focus_areas": data.focus_areas,
+                "yellow_topics": data.yellow_topics,
+            }
+            s.state = state
+            s.mode = "jd_specific"
+            db.commit()
+    return result

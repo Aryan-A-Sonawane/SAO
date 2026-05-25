@@ -258,6 +258,163 @@ def build_adaptive_end_eval(
     }
 
 
+def _build_action_plan(
+    *,
+    transcript: List[Dict[str, str]],
+    end_eval: Dict[str, Any],
+    topics_covered: List[str],
+    job_role: str = "",
+) -> Dict[str, Any]:
+    """Generate an action-oriented improvement plan (Item 4 of the launch polish).
+
+    Output shape (intentionally prescriptive, not generic):
+        {
+          "what_interviewer_expected": [...],
+          "what_you_delivered": [...],
+          "technical_improvements": [
+            {"area": "...", "priority": "high|medium|low", "concrete_step": "..."}
+          ],
+          "non_technical_improvements": [...],
+          "next_7_day_plan": ["Day 1: ...", "Day 2: ...", ...],
+          "recommended_resources": [{"title": "...", "url": "...", "kind": "..."}]
+        }
+
+    Falls back to a minimal structure if Gemini fails — never blocks the report.
+    """
+    # Summarise transcript for the prompt (cap at ~16 turns to keep tokens bounded).
+    turns = []
+    for t in (transcript or [])[:32]:
+        role = (t.get("role") or "").lower()
+        content = str(t.get("content") or "")[:300]
+        if not content:
+            continue
+        if role == "interviewer":
+            turns.append(f"Q: {content}")
+        elif role in ("candidate", "user", "student"):
+            turns.append(f"A: {content}")
+    excerpt = "\n".join(turns[-20:])  # last 20 turns are most informative
+
+    weak = end_eval.get("weaknesses") or []
+    strengths = end_eval.get("strengths") or []
+    category_scores = end_eval.get("category_scores") or {}
+    overall = end_eval.get("overall_score") or 0
+    role_label = (job_role or "candidate").replace("_", " ")
+    cat_lines = ", ".join(f"{k}={round(float(v))}" for k, v in category_scores.items())
+
+    prompt = f"""You are a senior {role_label} interviewer writing a candid post-interview
+brief for the candidate. The candidate scored {overall}/100. Per-topic: {cat_lines or "n/a"}.
+Strengths: {strengths}
+Weaknesses: {weak}
+Topics covered: {topics_covered}
+
+Transcript excerpt:
+{excerpt}
+
+Return STRICT JSON of this exact shape (no extra keys, no markdown):
+{{
+  "what_interviewer_expected": ["3-5 short bullets — what a competent answer would have looked like for the questions asked"],
+  "what_you_delivered": ["3-5 short bullets — honest, specific summary of what the candidate actually demonstrated"],
+  "technical_improvements": [
+    {{"area": "specific topic", "priority": "high|medium|low",
+      "concrete_step": "ONE prescriptive action with an estimated time, e.g. 'Spend 4 hours on Kruskal\\u2019s + Prim\\u2019s — solve LC 1135 and 1584'"}}
+  ],
+  "non_technical_improvements": [
+    {{"area": "Communication / Confidence / Structure / Behavioural", "priority": "high|medium|low",
+      "concrete_step": "ONE prescriptive action, e.g. 'Practise STAR with 3 behavioural questions tonight'"}}
+  ],
+  "next_7_day_plan": ["Day 1: ...", "Day 2: ...", "Day 3: ...", "Day 4: ...", "Day 5: ...", "Day 6: ...", "Day 7: ..."],
+  "recommended_resources": [
+    {{"title": "resource name", "url": "https://...", "kind": "book|video|course|article|practice"}}
+  ]
+}}
+
+Rules:
+- Be specific. No "study more" / "be confident". Prescribe actions tied to the candidate's actual gaps.
+- Cap technical_improvements at 5, non_technical_improvements at 3, recommended_resources at 5.
+- URLs are optional — if you don't have one, omit the field but keep title + kind.
+"""
+
+    raw = _generate(prompt, json_mode=True)
+    parsed = _safe_parse_json(raw) if raw else None
+
+    fallback = {
+        "what_interviewer_expected": [],
+        "what_you_delivered": [],
+        "technical_improvements": [
+            {"area": w, "priority": "high", "concrete_step": f"Review fundamentals of {w} and solve 3 targeted problems."}
+            for w in (weak[:3] if weak else [])
+        ],
+        "non_technical_improvements": [],
+        "next_7_day_plan": [],
+        "recommended_resources": [],
+    }
+
+    if not isinstance(parsed, dict):
+        return fallback
+
+    def _str_list(v, cap=8):
+        if not isinstance(v, list):
+            return []
+        return [str(x).strip() for x in v if isinstance(x, str) and x.strip()][:cap]
+
+    def _obj_list(v, allowed_keys, cap):
+        if not isinstance(v, list):
+            return []
+        out = []
+        for item in v:
+            if not isinstance(item, dict):
+                continue
+            cleaned = {}
+            for k in allowed_keys:
+                val = item.get(k)
+                if isinstance(val, str) and val.strip():
+                    cleaned[k] = val.strip()[:300]
+            if cleaned.get("area") and cleaned.get("concrete_step"):
+                cleaned.setdefault("priority", "medium")
+                if cleaned["priority"] not in ("high", "medium", "low"):
+                    cleaned["priority"] = "medium"
+                out.append(cleaned)
+            if len(out) >= cap:
+                break
+        return out
+
+    def _resources(v):
+        if not isinstance(v, list):
+            return []
+        out = []
+        for item in v:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            if not title:
+                continue
+            entry = {"title": title[:120]}
+            if isinstance(item.get("url"), str) and item["url"].startswith("http"):
+                entry["url"] = item["url"][:300]
+            entry["kind"] = str(item.get("kind") or "article").strip().lower()[:20]
+            out.append(entry)
+            if len(out) >= 5:
+                break
+        return out
+
+    return {
+        "what_interviewer_expected": _str_list(parsed.get("what_interviewer_expected"), 5),
+        "what_you_delivered": _str_list(parsed.get("what_you_delivered"), 5),
+        "technical_improvements": _obj_list(
+            parsed.get("technical_improvements"),
+            ("area", "priority", "concrete_step"),
+            5,
+        ),
+        "non_technical_improvements": _obj_list(
+            parsed.get("non_technical_improvements"),
+            ("area", "priority", "concrete_step"),
+            3,
+        ),
+        "next_7_day_plan": _str_list(parsed.get("next_7_day_plan"), 7),
+        "recommended_resources": _resources(parsed.get("recommended_resources")),
+    }
+
+
 def build_report(
     *,
     topic: str,
@@ -265,9 +422,16 @@ def build_report(
     transcript: List[Dict[str, str]],
     behavioral_stats: Dict[str, Any],
     topics_covered: List[str],
+    job_role: str = "",
 ) -> Dict[str, Any]:
     """Compose the full interview report stored on InterviewSession.report."""
     communication = build_communication_analysis(transcript, behavioral_stats or {}, topic)
+    action_plan = _build_action_plan(
+        transcript=transcript,
+        end_eval=end_eval,
+        topics_covered=topics_covered,
+        job_role=job_role,
+    )
     return {
         "overall_score": end_eval.get("overall_score"),
         "verdict": end_eval.get("verdict"),
@@ -279,4 +443,5 @@ def build_report(
         "closing_message": end_eval.get("closing_message") or "",
         "communication": communication,
         "topics_covered": topics_covered,
+        "action_plan": action_plan,
     }

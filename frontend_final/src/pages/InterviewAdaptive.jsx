@@ -27,14 +27,17 @@ import toast from 'react-hot-toast'
 import {
   Mic, Send, ImagePlus, StopCircle, Clock, Target, Sparkles, AlertCircle,
   CheckCircle2, TrendingUp, TrendingDown, ArrowRight, RotateCcw, Loader2,
-  ChevronRight, Award, Brain, Layers, Camera,
-  Eye, Activity, Shield, BadgeCheck, UserCheck, MessageSquare,
+  ChevronRight, Award, Brain, Layers, Camera, Code2,
+  Eye, Activity, Shield, BadgeCheck, UserCheck, MessageSquare, FileText,
 } from 'lucide-react'
 
 import DarkLayout from '../components/layout/DarkLayout'
 import CaptureModal from '../components/interview/CaptureModal'
-import { adaptiveInterviewApi } from '../api/client'
+import CodePanel from '../components/interview/CodePanel'
+import JDUploadDrawer from '../components/JDUploadDrawer'
+import { adaptiveInterviewApi, companiesApi } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { useCompanies } from '../lib/queries'
 import * as faceapi from 'face-api.js'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -55,8 +58,14 @@ const MODES = [
   {
     id: 'company_specific',
     label: 'Company Specific',
-    blurb: 'Tailored to a target company\'s interview style. Needs a company name.',
+    blurb: 'Tailored to a target company\'s interview style. Pick from the list — or add one.',
     icon: '🏢',
+  },
+  {
+    id: 'jd_specific',
+    label: 'From a JD',
+    blurb: 'Upload a job description — interview is grounded in exactly what THAT role demands.',
+    icon: '📄',
   },
 ]
 
@@ -122,14 +131,53 @@ function SetupScreen({ user, onStarted }) {
   const [mode, setMode] = useState('studied_topics')
   const [duration, setDuration] = useState(30)
   const [company, setCompany] = useState('')
+  const [companyInput, setCompanyInput] = useState('')
+  const [activeSector, setActiveSector] = useState('All')
+  const [showAllCompanies, setShowAllCompanies] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showCameraDialog, setShowCameraDialog] = useState(false)
+  const [showJDDrawer, setShowJDDrawer] = useState(false)
+  // Holds the parsed JD blueprint between drawer-submit and camera-launch so
+  // the user still sees the camera-setup gate before the interview starts.
+  const [pendingJDBlueprint, setPendingJDBlueprint] = useState(null)
+
+  // ─── Company picker support ────────────────────────────────────────────
+  const companiesQuery = useCompanies({ enabled: mode === 'company_specific' })
+  const companies = companiesQuery.data?.companies || []
+  const sectors = useMemo(() => {
+    const set = new Set()
+    companies.forEach((c) => c.sector && set.add(c.sector))
+    return ['All', ...Array.from(set)]
+  }, [companies])
+  const filteredCompanies = useMemo(() => {
+    const q = companyInput.trim().toLowerCase()
+    let list = companies
+    if (activeSector !== 'All') list = list.filter((c) => c.sector === activeSector)
+    if (q) list = list.filter((c) => c.name.toLowerCase().includes(q))
+    return list
+  }, [companies, companyInput, activeSector])
+  const visibleCompanies = useMemo(() => {
+    if (showAllCompanies || companyInput.trim()) return filteredCompanies
+    return filteredCompanies.slice(0, 12)
+  }, [filteredCompanies, showAllCompanies, companyInput])
 
   // Opens the camera dialog — validates first
   const handleOpenCameraDialog = () => {
-    if (mode === 'company_specific' && !company.trim()) {
-      toast.error('Pick a company first.')
-      return
+    if (mode === 'company_specific') {
+      const target = (company || companyInput).trim()
+      if (!target) {
+        toast.error('Pick a company first — or add a new one by typing its name.')
+        return
+      }
+      // Persist the typed-in company so the launcher uses it.
+      setCompany(target)
+    }
+    if (mode === 'jd_specific') {
+      // JD flow has its own entry point — the drawer.
+      if (!pendingJDBlueprint) {
+        setShowJDDrawer(true)
+        return
+      }
     }
     setShowCameraDialog(true)
   }
@@ -139,11 +187,23 @@ function SetupScreen({ user, onStarted }) {
     setShowCameraDialog(false)
     setSubmitting(true)
     try {
-      const result = await adaptiveInterviewApi.start({
-        mode,
-        target_duration_minutes: duration,
-        company: mode === 'company_specific' ? company.trim() : undefined,
-      })
+      let result
+      if (mode === 'jd_specific' && pendingJDBlueprint) {
+        result = await adaptiveInterviewApi.startFromJD({
+          jd_text: pendingJDBlueprint.jd_text,
+          role_title: pendingJDBlueprint.suggested_role_title,
+          target_duration_minutes: duration,
+          green_topics: pendingJDBlueprint.green_topics,
+          yellow_topics: pendingJDBlueprint.yellow_topics,
+          focus_areas: pendingJDBlueprint.focus_areas,
+        })
+      } else {
+        result = await adaptiveInterviewApi.start({
+          mode,
+          target_duration_minutes: duration,
+          company: mode === 'company_specific' ? (company || companyInput).trim() : undefined,
+        })
+      }
       onStarted(result, streams)   // pass camera streams directly to parent
     } catch (err) {
       const detail = err.response?.data?.detail || err.message || 'Could not start interview.'
@@ -152,8 +212,25 @@ function SetupScreen({ user, onStarted }) {
     }
   }
 
+  const handleJDSubmit = (blueprint) => {
+    // Drawer hands back the parsed blueprint; cache it and then route to the
+    // camera-setup gate. Don't auto-launch — we want the user to confirm
+    // camera permissions first like every other mode.
+    setPendingJDBlueprint(blueprint)
+    setShowJDDrawer(false)
+    setShowCameraDialog(true)
+  }
+
   return (
     <>
+      {/* JD upload drawer — opens when user picks 'From a JD' mode */}
+      <JDUploadDrawer
+        open={showJDDrawer}
+        mode="interview"
+        onClose={() => setShowJDDrawer(false)}
+        onSubmit={handleJDSubmit}
+      />
+
       {/* Camera assignment dialog — shown as modal overlay */}
       <AnimatePresence>
         {showCameraDialog && (
@@ -194,7 +271,7 @@ function SetupScreen({ user, onStarted }) {
 
         {/* Mode picker */}
         <Section title="Choose a mode">
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(4, 1fr)' }}>
             {MODES.map((m) => (
               <button
                 key={m.id}
@@ -240,7 +317,7 @@ function SetupScreen({ user, onStarted }) {
           </p>
         </Section>
 
-        {/* Company input — only for company_specific mode */}
+        {/* Company picker — only for company_specific mode. Mirrors /plan layout. */}
         <AnimatePresence>
           {mode === 'company_specific' && (
             <motion.div
@@ -249,25 +326,159 @@ function SetupScreen({ user, onStarted }) {
               exit={{ opacity: 0, height: 0 }}
             >
               <Section title="Company">
-                <input
-                  type="text"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  placeholder="e.g. Google, Stripe, Razorpay"
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    padding: '12px 14px', borderRadius: 10,
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    color: '#f1f5f9', fontSize: 14, fontFamily: 'Inter, system-ui',
-                  }}
-                />
+                {/* Search + add-new */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <input
+                    type="text"
+                    value={companyInput}
+                    onChange={(e) => setCompanyInput(e.target.value)}
+                    placeholder="Search a company, or type a new one to add it"
+                    style={{
+                      flex: '1 1 240px', minWidth: 0,
+                      padding: '12px 14px', borderRadius: 10,
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid ' + (company ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.08)'),
+                      color: '#f1f5f9', fontSize: 14, fontFamily: 'Inter, system-ui',
+                      outline: 'none',
+                    }}
+                  />
+                  {companyInput.trim() && !filteredCompanies.some((c) => c.name.toLowerCase() === companyInput.trim().toLowerCase()) && (
+                    <button
+                      onClick={() => setCompany(companyInput.trim())}
+                      style={{
+                        padding: '10px 14px', borderRadius: 10,
+                        border: '1px solid rgba(168,85,247,0.45)',
+                        background: 'rgba(168,85,247,0.15)',
+                        color: '#e9d5ff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      + Use “{companyInput.trim()}”
+                    </button>
+                  )}
+                </div>
+
+                {/* Sector chips */}
+                {sectors.length > 1 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {sectors.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setActiveSector(s)}
+                        style={{
+                          padding: '4px 10px', borderRadius: 999,
+                          fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
+                          border: '1px solid ' + (activeSector === s ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.08)'),
+                          background: activeSector === s ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.03)',
+                          color: activeSector === s ? '#c7d2fe' : '#94a3b8',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Company grid */}
+                <div style={{
+                  display: 'grid',
+                  gap: 8,
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                }}>
+                  {companiesQuery.isLoading && (
+                    <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: 16 }}>
+                      Loading companies…
+                    </div>
+                  )}
+                  {visibleCompanies.map((c) => {
+                    const active = (company || companyInput).toLowerCase() === c.name.toLowerCase()
+                    return (
+                      <button
+                        key={c.slug}
+                        onClick={() => { setCompany(c.name); setCompanyInput(c.name) }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '10px 12px', borderRadius: 12, textAlign: 'left',
+                          border: '1px solid ' + (active ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.08)'),
+                          background: active ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.03)',
+                          cursor: 'pointer', transition: 'all 0.2s',
+                        }}
+                      >
+                        {c.logo_url && (
+                          <img
+                            src={c.logo_url}
+                            alt=""
+                            style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0 }}
+                            onError={(e) => { e.currentTarget.style.display = 'none' }}
+                          />
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {c.name}
+                          </div>
+                          {c.sector && (
+                            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                              {c.sector}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                {!showAllCompanies && !companyInput.trim() && filteredCompanies.length > visibleCompanies.length && (
+                  <button
+                    onClick={() => setShowAllCompanies(true)}
+                    style={{
+                      marginTop: 10, background: 'transparent', border: 'none',
+                      color: '#a5b4fc', fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    Show all {filteredCompanies.length} companies
+                  </button>
+                )}
               </Section>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Start button — opens camera dialog */}
+        {/* JD-specific summary card after blueprint is loaded */}
+        <AnimatePresence>
+          {mode === 'jd_specific' && pendingJDBlueprint && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <Section title="Job description loaded">
+                <div style={{
+                  padding: 16, borderRadius: 12,
+                  background: 'rgba(99,102,241,0.06)',
+                  border: '1px solid rgba(99,102,241,0.2)',
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>
+                    {pendingJDBlueprint.suggested_role_title}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
+                    {(pendingJDBlueprint.green_topics || []).length} must-know topics queued ·{' '}
+                    {(pendingJDBlueprint.yellow_topics || []).length} stretch topics
+                  </div>
+                  <button
+                    onClick={() => { setPendingJDBlueprint(null); setShowJDDrawer(true) }}
+                    style={{
+                      marginTop: 10, background: 'transparent', border: 'none',
+                      color: '#a5b4fc', fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    Replace JD
+                  </button>
+                </div>
+              </Section>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Start button — opens JD drawer first (if jd mode + no blueprint) or camera */}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
           <button
             onClick={handleOpenCameraDialog}
@@ -283,8 +494,14 @@ function SetupScreen({ user, onStarted }) {
               opacity: submitting ? 0.7 : 1,
             }}
           >
-            {submitting ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
-            {submitting ? 'Starting interview…' : 'Start interview'}
+            {submitting ? <Loader2 size={18} className="animate-spin" /> :
+              mode === 'jd_specific' && !pendingJDBlueprint ? <FileText size={18} /> :
+              <Camera size={18} />}
+            {submitting
+              ? 'Starting interview…'
+              : mode === 'jd_specific' && !pendingJDBlueprint
+                ? 'Upload JD to continue'
+                : 'Start interview'}
           </button>
         </div>
 
@@ -435,17 +652,17 @@ function JudgmentChip({ judgment, action, onDismiss }) {
 }
 
 // ─── Live session sidebar (progress) ────────────────────────────────────────
-function ProgressSidebar({ progress, mode, endReason, onEnd }) {
+function ProgressSidebar({ progress, mode, endReason, onEnd, ending = false }) {
   if (!progress) return null
   return (
     <aside style={{
-      width: 280, flexShrink: 0,
+      width: '100%', flexShrink: 0,
+      boxSizing: 'border-box',
       background: 'rgba(15,15,24,0.55)',
       border: '1px solid rgba(255,255,255,0.06)',
-      borderRadius: 16, padding: 18,
+      borderRadius: 16, padding: 16,
       fontFamily: 'Inter, system-ui',
-      alignSelf: 'flex-start', position: 'sticky', top: 20,
-      maxHeight: 'calc(100vh - 40px)', overflowY: 'auto',
+      maxHeight: '100%', overflowY: 'auto',
     }}>
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 11, color: '#94a3b8', letterSpacing: 1, marginBottom: 6, textTransform: 'uppercase' }}>
@@ -481,7 +698,10 @@ function ProgressSidebar({ progress, mode, endReason, onEnd }) {
               fontSize: 12, color: '#cbd5e1',
             }}>
               <MarkerDot marker={t.marker} />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.topic}</span>
+              <span style={{
+                flex: 1, minWidth: 0,
+                lineHeight: 1.3, wordBreak: 'break-word',
+              }}>{t.topic}</span>
               {t.avg_score != null && (
                 <span style={{ color: t.avg_score >= 70 ? '#34d399' : t.avg_score >= 40 ? '#fbbf24' : '#f87171', fontWeight: 600 }}>
                   {Math.round(t.avg_score)}
@@ -508,16 +728,20 @@ function ProgressSidebar({ progress, mode, endReason, onEnd }) {
       {!endReason && (
         <button
           onClick={onEnd}
+          disabled={ending}
           style={{
             width: '100%', padding: '10px 14px', borderRadius: 10,
-            background: 'rgba(239,68,68,0.08)',
+            background: ending ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.08)',
             border: '1px solid rgba(239,68,68,0.25)',
-            color: '#fca5a5', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            color: '#fca5a5', fontSize: 13, fontWeight: 600,
+            cursor: ending ? 'wait' : 'pointer',
+            opacity: ending ? 0.85 : 1,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             fontFamily: 'Inter, system-ui',
           }}
         >
-          <StopCircle size={14} /> End interview
+          {ending ? <Loader2 size={14} className="animate-spin" /> : <StopCircle size={14} />}
+          {ending ? 'Generating report…' : 'End interview'}
         </button>
       )}
 
@@ -1429,7 +1653,9 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
   const [submitting, setSubmitting] = useState(false)
   const [lastJudgment, setLastJudgment] = useState(null)  // {judgment, action}
   const [captureOpen, setCaptureOpen] = useState(false)
+  const [codeOpen, setCodeOpen] = useState(false)
   const [endReason, setEndReason] = useState(initialData?.end_reason || null)
+  const [ending, setEnding] = useState(false)
 
   const scrollerRef = useRef(null)
   const textareaRef = useRef(null)
@@ -1760,7 +1986,9 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
   }, [onEnded, buildBehavioralStats])
 
   const handleEndManually = useCallback(async () => {
+    if (ending) return
     if (!confirm('End the interview now? You\'ll get a partial report.')) return
+    setEnding(true)
     try {
       const behavioral = buildBehavioralStats()
       const result = await adaptiveInterviewApi.end(sessionId, behavioral)
@@ -1772,8 +2000,9 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
     } catch (err) {
       const detail = err.response?.data?.detail || 'Could not end session.'
       toast.error(detail)
+      setEnding(false)
     }
-  }, [sessionId, onEnded, buildBehavioralStats])
+  }, [sessionId, onEnded, buildBehavioralStats, ending])
 
   const onKeyDown = (e) => {
     // Cmd/Ctrl+Enter to submit.
@@ -1791,7 +2020,36 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
   const topAlertOk = topCamAlert === null
 
   return (
-    <div style={{ display: 'flex', gap: 0, height: '100vh' }}>
+    <div style={{ display: 'flex', gap: 0, height: '100vh', position: 'relative' }}>
+
+      {/* ── Ending overlay — covers everything while Gemini generates the report ─── */}
+      <AnimatePresence>
+        {ending && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(5,5,12,0.92)',
+              backdropFilter: 'blur(8px)',
+              display: 'grid', placeItems: 'center',
+              fontFamily: 'Inter, system-ui',
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, maxWidth: 420, textAlign: 'center', padding: 24 }}>
+              <Loader2 size={48} className="animate-spin" style={{ color: '#a5b4fc' }} />
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', letterSpacing: -0.3 }}>
+                Wrapping up your interview
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.55, color: '#94a3b8' }}>
+                Our AI is grading your responses and generating a detailed report.
+                <br />This usually takes 15–30 seconds — please don't close the tab.
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Main interview area ─────────────────────────────────────────────── */}
       <div style={{
@@ -1804,9 +2062,11 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
         {/* ═══ VIDEO GRID ═════════════════════════════════════════════════════ */}
         {!endReason && (
           <div style={{
-            flex: 1, minHeight: 0,
+            flex: 1, minHeight: 120,
             display: 'grid', gridTemplateColumns: '1fr 1fr',
             gap: 12, marginBottom: 10,
+            overflow: 'hidden',
+            transition: 'flex 0.3s ease',
           }}>
 
             {/* ── Left col: AI Avatar + Current Question ── */}
@@ -1992,6 +2252,26 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
           </div>
         )}
 
+        {/* ── Code panel — opens ONLY on user click (Code button or chip).
+            We deliberately do NOT auto-open for `requires_code` questions
+            anymore; instead the "Code" toolbar button highlights and a small
+            inline chip nudges the candidate. This keeps the stage area clean
+            and gives the user full control over when the editor takes screen
+            real-estate. ── */}
+        <AnimatePresence>
+          {!endReason && codeOpen && (
+            <CodePanel
+              sessionId={sessionId}
+              questionContext={currentQ?.text || currentQ?.content || ''}
+              onClose={() => setCodeOpen(false)}
+              onSubmitToInterview={(snippet) => {
+                setAnswerText((prev) => (prev ? prev + '\n\n' : '') + snippet)
+                setCodeOpen(false)
+              }}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Judgment chip + submitting indicator — above input bar */}
         <AnimatePresence>
           {lastJudgment && !submitting && !endReason && (
@@ -2077,6 +2357,22 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
               </button>
 
               <button
+                onClick={() => setCodeOpen((v) => !v)}
+                disabled={submitting}
+                title="Toggle code editor"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '8px 12px', borderRadius: 9,
+                  background: codeOpen || currentQ?.requires_code ? 'rgba(168,85,247,0.18)' : 'rgba(255,255,255,0.04)',
+                  border: '1px solid ' + (codeOpen || currentQ?.requires_code ? 'rgba(168,85,247,0.45)' : 'rgba(255,255,255,0.08)'),
+                  color: '#f1f5f9', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, system-ui',
+                }}
+              >
+                <Code2 size={13} />
+                Code
+              </button>
+
+              <button
                 onClick={toggleVoice}
                 disabled={submitting}
                 title={isListening ? 'Stop listening' : 'Speak your answer'}
@@ -2123,16 +2419,23 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
                 {submitting ? 'Sending…' : 'Send answer'}
               </button>
             </div>
+
           </div>
         )}
       </div>
 
       {/* ── Right: Progress sidebar ──────────────────────────────────────────── */}
-      <div style={{ flexShrink: 0, width: 220, padding: '16px 16px 16px 0', overflow: 'hidden' }}>
+      <div style={{
+        flexShrink: 0, width: 280,
+        padding: '16px 16px 16px 0',
+        height: '100vh',
+        display: 'flex', flexDirection: 'column',
+      }}>
         <ProgressSidebar
           progress={progress}
           mode={mode}
           endReason={endReason}
+          ending={ending}
           onEnd={handleEndManually}
         />
       </div>
@@ -2152,6 +2455,39 @@ function LiveScreen({ sessionId, initialData, cameraStreams = {}, onEnded }) {
 // ─── End-of-interview inline banner ─────────────────────────────────────────
 function EndBanner({ endReason, sessionId }) {
   const copy = END_REASON_COPY[endReason] || END_REASON_COPY.target_met
+  const navigate = useNavigate()
+  const [downloading, setDownloading] = useState(false)
+  const [pushing, setPushing] = useState(false)
+
+  const handleDownload = async () => {
+    if (!sessionId) return
+    setDownloading(true)
+    try {
+      const { downloadInterviewReportPDF } = await import('../lib/downloadFile')
+      await downloadInterviewReportPDF(sessionId)
+      toast.success('Report downloaded')
+    } catch {
+      toast.error('Could not download report')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const handlePushToRemediation = async () => {
+    if (!sessionId) return
+    setPushing(true)
+    try {
+      const { remediationApi } = await import('../api/client')
+      await remediationApi.fromInterview(sessionId)
+      toast.success('Weak topics added to Remediation Hub')
+      navigate('/remediation')
+    } catch {
+      toast.error('Could not add to Remediation')
+    } finally {
+      setPushing(false)
+    }
+  }
+
   return (
     <div style={{
       background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(168,85,247,0.06))',
@@ -2163,6 +2499,57 @@ function EndBanner({ endReason, sessionId }) {
         {copy.title}
       </h3>
       <p style={{ color: '#cbd5e1', fontSize: 13, margin: '6px 0 14px' }}>{copy.body}</p>
+
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center',
+        marginBottom: 10,
+      }}>
+        {sessionId && (
+          <button
+            onClick={() => navigate(`/interviews/${sessionId}`)}
+            style={{
+              padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+              background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+              color: '#fff', border: 'none',
+              fontSize: 12, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif",
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <BadgeCheck size={13} /> View full report
+          </button>
+        )}
+        <button
+          onClick={handleDownload}
+          disabled={!sessionId || downloading}
+          style={{
+            padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+            background: 'rgba(255,255,255,0.05)', color: '#cbd5e1',
+            border: '1px solid rgba(255,255,255,0.1)',
+            fontSize: 12, fontWeight: 600,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            opacity: !sessionId || downloading ? 0.6 : 1,
+          }}
+        >
+          {downloading ? <Loader2 size={13} className="animate-spin" /> : <span>⬇</span>}
+          {downloading ? 'Building…' : 'Download PDF'}
+        </button>
+        <button
+          onClick={handlePushToRemediation}
+          disabled={!sessionId || pushing}
+          style={{
+            padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+            background: 'rgba(245,158,11,0.1)', color: '#fbbf24',
+            border: '1px solid rgba(245,158,11,0.25)',
+            fontSize: 12, fontWeight: 600,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            opacity: !sessionId || pushing ? 0.6 : 1,
+          }}
+        >
+          {pushing ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
+          {pushing ? 'Adding…' : 'Add weak topics to Remediation'}
+        </button>
+      </div>
+
       <p style={{ color: '#94a3b8', fontSize: 12 }}>Scroll down for your scorecard ↓</p>
     </div>
   )
@@ -2681,6 +3068,13 @@ export default function InterviewAdaptive() {
     setPhase('live')
     // Reflect session in URL so reload survives.
     navigate(`/interview/live/${result.session_id}`, { replace: true })
+    // Enter browser fullscreen — must be inside the user-gesture chain (start click).
+    try {
+      const el = document.documentElement
+      if (el.requestFullscreen && !document.fullscreenElement) {
+        el.requestFullscreen().catch(() => {})
+      }
+    } catch (_) {}
   }
 
   const handleEnded = (result) => {
@@ -2692,6 +3086,12 @@ export default function InterviewAdaptive() {
       end_reason: result.end_reason || 'target_met',
     })
     setPhase('ended')
+    // Exit fullscreen so the report screen has the regular sidebar/chrome back.
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {})
+      }
+    } catch (_) {}
   }
 
   return (
