@@ -5,7 +5,7 @@
     "rewrites": [
         {
             "source": "/api/:path*",
-            "destination": "https://aissms-backend.onrender.com/api/:path*"
+            "destination": "https://interviewvault-api.onrender.com/api/:path*"
         }
     ]
 }
