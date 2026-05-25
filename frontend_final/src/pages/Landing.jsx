@@ -15,6 +15,23 @@ import '../styles/landing.css'
 
 const ease = [0.16, 1, 0.3, 1]
 
+/* ─── Tiny platform marks used inside the Download App nav button ─────────── */
+function NavAndroidIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="Android">
+      <path fill="#3DDC84" d="M17.6 9.48l1.84-3.18a.4.4 0 0 0-.69-.4l-1.86 3.22a11.3 11.3 0 0 0-9.78 0L5.25 5.9a.4.4 0 1 0-.69.4L6.4 9.48A10.81 10.81 0 0 0 1 18h22a10.81 10.81 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 7 15.25zm10 0a1.25 1.25 0 1 1 1.25-1.25 1.25 1.25 0 0 1-1.25 1.25z"/>
+    </svg>
+  )
+}
+
+function NavAppleIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="Apple">
+      <path fill="#ffffff" d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+    </svg>
+  )
+}
+
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 function useInView(threshold = 0.15) {
   const ref = useRef(null)
@@ -76,6 +93,22 @@ function Navbar({ user, navigate }) {
           onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
           >{link}</a>
         ))}
+
+        {/* Mobile-app download CTA — visible to everyone, signed-in or not.
+            Uses the same MagneticButton chrome as Sign In / Get Started Free
+            for visual parity, with the Android + Apple marks reading as a
+            compact platform-availability hint. Hidden on narrow viewports
+            to keep the nav from crowding. */}
+        <span className="nav-download-link">
+          <MagneticButton variant="ghost" href="/download">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              Download App
+              <NavAndroidIcon />
+              <NavAppleIcon />
+            </span>
+          </MagneticButton>
+        </span>
+
         {user ? (
           <MagneticButton variant="primary" onClick={() => navigate('/student/dashboard')}>
             Dashboard →
@@ -87,6 +120,12 @@ function Navbar({ user, navigate }) {
           </>
         )}
       </div>
+
+      <style>{`
+        @media (max-width: 520px) {
+          .nav-download-link { display: none !important; }
+        }
+      `}</style>
     </nav>
   )
 }
@@ -1062,9 +1101,29 @@ function CTASection() {
         <p style={{ fontSize: '1.05rem', color: '#64748b', marginBottom: 40, maxWidth: 480, margin: '0 auto 40px', lineHeight: 1.75 }}>
           Start with a free account. Build your learning path, practice with AI, and walk into that room ready.
         </p>
-        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
           <MagneticButton variant="primary" size="lg" href="/register">🚀 Start Free — No Card Needed</MagneticButton>
           <MagneticButton variant="ghost" size="lg" href="/login">View Demo →</MagneticButton>
+        </div>
+        {/* Mobile app — third tier CTA below the primary pair. Keeps the
+            hero focused on signup while still surfacing the install path. */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: '0.82rem', color: '#64748b' }}>Or prep on the go —</span>
+          <a
+            href="/download"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '7px 14px', borderRadius: 9, textDecoration: 'none',
+              background: 'rgba(99,102,241,0.10)',
+              border: '1px solid rgba(99,102,241,0.28)',
+              color: '#c7d2fe', fontSize: '0.85rem', fontWeight: 700,
+              transition: 'background 0.2s, transform 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.18)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.10)'; e.currentTarget.style.transform = 'translateY(0)' }}
+          >
+            📱 Download the mobile app →
+          </a>
         </div>
       </motion.div>
     </section>
@@ -1088,7 +1147,20 @@ function Footer() {
         }}>⚡</div>
         <span><strong style={{ color: '#94a3b8', fontFamily: "'Space Grotesk', sans-serif" }}>InterviewVault</strong> — AI Interview Intelligence Platform</span>
       </div>
-      <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+        <a
+          href="/download"
+          style={{
+            color: '#a5b4fc', textDecoration: 'none', fontWeight: 600,
+            fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 6,
+            transition: 'color 0.2s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#c7d2fe' }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#a5b4fc' }}
+        >
+          📱 Download Mobile App
+        </a>
+        <span style={{ color: '#1e293b' }}>|</span>
         <span style={{ color: '#334155' }}>AI-Powered · Real-Time Intelligence</span>
         <span style={{ color: '#1e293b' }}>|</span>
         <span>Free forever</span>
