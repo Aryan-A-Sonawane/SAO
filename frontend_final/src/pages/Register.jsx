@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import WebGLCanvas from '../components/landing/WebGLCanvas'
-import { useMousePosition } from '../hooks/useMousePosition'
 import '../styles/auth-premium.css'
 
 /* ─── Typewriter text effect ────────────────────────────────────────────── */
@@ -36,12 +34,6 @@ export default function Register() {
   const [showSuccess, setShowSuccess] = useState(false)
   const { register } = useAuth()
   const navigate = useNavigate()
-  const mouse = useMousePosition()
-  const mouseRef = useRef({ nX: 0, nY: 0 })
-
-  useEffect(() => {
-    mouseRef.current = { nX: mouse.nX, nY: mouse.nY }
-  }, [mouse.nX, mouse.nY])
 
   const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -70,16 +62,8 @@ export default function Register() {
     }
   }
 
-  const roles = [
-    { val: 'student', icon: '🎓', label: 'Student / Candidate' },
-    { val: 'admin', icon: '👑', label: 'Teacher / HR Admin' },
-  ]
-
   return (
     <div className="auth-vault">
-      {/* WebGL particle canvas */}
-      <WebGLCanvas mouseRef={mouseRef} particleCount={600} />
-
       {/* Ambient orbs */}
       <div className="auth-orbs">
         <div className="auth-orb" />
@@ -158,29 +142,6 @@ export default function Register() {
                   required
                   autoComplete="new-password"
                 />
-              </div>
-            </div>
-
-            <div className="auth-field">
-              <label className="auth-label">I am a...</label>
-              <div className="auth-role-grid">
-                {roles.map(opt => (
-                  <label
-                    key={opt.val}
-                    className={`auth-role-option ${form.role === opt.val ? 'selected' : ''}`}
-                  >
-                    <input
-                      type="radio"
-                      name="role"
-                      value={opt.val}
-                      checked={form.role === opt.val}
-                      onChange={handleChange}
-                      style={{ display: 'none' }}
-                    />
-                    <span className="role-icon">{opt.icon}</span>
-                    <span className="role-label">{opt.label}</span>
-                  </label>
-                ))}
               </div>
             </div>
 

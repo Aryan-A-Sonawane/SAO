@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import WebGLCanvas from '../components/landing/WebGLCanvas'
-import { useMousePosition } from '../hooks/useMousePosition'
 import '../styles/auth-premium.css'
 
 /* ─── Typewriter text effect (ReactBits-inspired) ───────────────────────── */
@@ -53,12 +51,6 @@ export default function Login() {
   const [showSuccess, setShowSuccess] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
-  const mouse = useMousePosition()
-  const mouseRef = useRef({ nX: 0, nY: 0 })
-
-  useEffect(() => {
-    mouseRef.current = { nX: mouse.nX, nY: mouse.nY }
-  }, [mouse.nX, mouse.nY])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -113,9 +105,6 @@ export default function Login() {
 
   return (
     <div className="auth-vault">
-      {/* WebGL particle canvas — immersive background */}
-      <WebGLCanvas mouseRef={mouseRef} particleCount={600} />
-
       {/* Floating ambient orbs */}
       <FloatingParticles />
 

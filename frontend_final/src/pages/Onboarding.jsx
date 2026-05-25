@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import JDUploadDrawer from '@/components/JDUploadDrawer'
 
-import WebGLCanvas from '@/components/landing/WebGLCanvas'
 import '@/styles/dashboard-dark.css'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +31,6 @@ import {
 } from '@/lib/queries'
 import { onboardingApi } from '@/api/client'
 import { useAuth } from '@/context/AuthContext'
-import { useMousePosition } from '@/hooks/useMousePosition'
 
 const STEPS = [
   { id: 'role',   label: 'Choose role' },
@@ -50,9 +48,6 @@ const pageVariants = {
 export default function Onboarding() {
   const navigate = useNavigate()
   const { user, refreshUser } = useAuth()
-  const mouse = useMousePosition()
-  const mouseRef = React.useRef({ nX: 0, nY: 0 })
-  useEffect(() => { mouseRef.current = mouse }, [mouse])
 
   const status     = useOnboardingStatus({ retry: false })
   const rolesQuery = useOnboardingRoles()
@@ -127,8 +122,17 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="dark-app relative flex min-h-screen flex-col bg-[#05050a] overflow-hidden">
-      <WebGLCanvas mouseRef={mouseRef} particleCount={500} />
+    <div
+      className="dark-app relative flex min-h-screen flex-col overflow-hidden"
+      style={{
+        backgroundColor: '#05050a',
+        backgroundImage: 'url(/background.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      }}
+    >
 
       {/* ── Top chrome ────────────────────────────────────────────── */}
       <header className="relative z-20 flex items-center justify-center px-8 pt-7 pb-0 md:px-14">
