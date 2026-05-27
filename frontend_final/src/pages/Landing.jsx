@@ -1158,29 +1158,21 @@ function CTASection() {
         <p style={{ fontSize: '1.05rem', color: '#64748b', marginBottom: 40, maxWidth: 480, margin: '0 auto 40px', lineHeight: 1.75 }}>
           Start with a free account. Build your learning path, practice with AI, and walk into that room ready.
         </p>
-        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
-          <MagneticButton variant="primary" size="lg" href="/register">🚀 Start Free — No Card Needed</MagneticButton>
-          <MagneticButton variant="ghost" size="lg" href="/login">View Demo →</MagneticButton>
-        </div>
-        {/* Mobile app — third tier CTA below the primary pair. Keeps the
-            hero focused on signup while still surfacing the install path. */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: '0.82rem', color: '#64748b' }}>Or prep on the go —</span>
-          <a
-            href="/download"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '7px 14px', borderRadius: 9, textDecoration: 'none',
-              background: 'rgba(99,102,241,0.10)',
-              border: '1px solid rgba(99,102,241,0.28)',
-              color: '#c7d2fe', fontSize: '0.85rem', fontWeight: 700,
-              transition: 'background 0.2s, transform 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.18)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.10)'; e.currentTarget.style.transform = 'translateY(0)' }}
-          >
-            📱 Download the mobile app →
-          </a>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <MagneticButton variant="primary" size="lg" href="/register"
+            style={{ minWidth: 228, justifyContent: 'center' }}>
+            🚀 Start Free — No Card Needed
+          </MagneticButton>
+          <MagneticButton variant="ghost" size="lg" href="/login"
+            style={{ minWidth: 228, justifyContent: 'center' }}>
+            View Demo →
+          </MagneticButton>
+          <MagneticButton variant="ghost" size="lg" href="/download"
+            style={{ minWidth: 228, justifyContent: 'center' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              Download App <NavAndroidIcon size={15} /> <NavAppleIcon size={15} />
+            </span>
+          </MagneticButton>
         </div>
       </motion.div>
     </section>
