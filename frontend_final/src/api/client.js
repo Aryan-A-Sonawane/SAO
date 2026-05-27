@@ -186,6 +186,9 @@ export const interviewSessionsApi = {
   remove: (id) => api.delete(`/interviews/sessions/${id}`).then((r) => r.data),
   setArchived: (id, archived) =>
     api.patch(`/interviews/sessions/${id}/archive`, { archived }).then((r) => r.data),
+  // Explicit user click in the report page — never auto-sent (privacy-conscious by design).
+  emailReport: (id) =>
+    api.post(`/interviews/sessions/${id}/email-report`, null, { timeout: 60000 }).then((r) => r.data),
 }
 
 // ─── Phase 3 + 4: server-side adaptive interview engine ────────────────────

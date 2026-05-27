@@ -49,84 +49,135 @@ function useInView(threshold = 0.15) {
 /* ─── NAVBAR ────────────────────────────────────────────────────────────────── */
 function Navbar({ user, navigate }) {
   const [scrolled, setScrolled] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 30)
     window.addEventListener('scroll', fn, { passive: true })
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
+  useEffect(() => {
+    const fn = () => { if (window.innerWidth > 640) setMobileOpen(false) }
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
+
+  const solid = scrolled || mobileOpen
+
   return (
-    <nav style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 48px', height: 64,
-      background: scrolled ? 'rgba(5,5,10,0.92)' : 'transparent',
-      borderBottom: scrolled ? '1px solid rgba(255,255,255,0.07)' : '1px solid transparent',
-      backdropFilter: scrolled ? 'blur(24px)' : 'none',
-      transition: 'all 0.4s ease',
-    }}>
-      {/* Logo */}
-      <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-        <div style={{
-          width: 34, height: 34, borderRadius: 10,
-          background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-          display: 'grid', placeItems: 'center',
-          fontSize: '1rem', boxShadow: '0 0 20px rgba(99,102,241,0.5)',
-        }}>⚡</div>
-        <span style={{
-          fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700,
-          fontSize: '1.15rem', color: '#f1f5f9', letterSpacing: '-0.02em',
-        }}>
-          Interview<span style={{ color: '#818cf8' }}>Vault</span>
-        </span>
-      </a>
+    <>
+      <nav className="lp-nav" style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 48px', height: 64,
+        background: solid ? 'rgba(5,5,10,0.97)' : 'transparent',
+        borderBottom: solid ? '1px solid rgba(255,255,255,0.07)' : '1px solid transparent',
+        backdropFilter: solid ? 'blur(24px)' : 'none',
+        transition: 'all 0.4s ease',
+      }}>
+        {/* Logo */}
+        <a href="/" className="lp-nav-logo" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 10,
+            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+            display: 'grid', placeItems: 'center',
+            fontSize: '1rem', boxShadow: '0 0 20px rgba(99,102,241,0.5)',
+          }}>⚡</div>
+          <span className="lp-nav-brand" style={{
+            fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700,
+            fontSize: '1.15rem', color: '#f1f5f9', letterSpacing: '-0.02em',
+          }}>
+            Interview<span style={{ color: '#818cf8' }}>Vault</span>
+          </span>
+        </a>
 
-      {/* Nav links */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        {['Features', 'How It Works', 'Company Prep'].map(link => (
-          <a key={link} href={`#${link.toLowerCase().replace(/ /g, '-')}`} style={{
-            color: '#94a3b8', fontSize: '0.88rem', fontWeight: 500,
-            padding: '8px 14px', borderRadius: 8, textDecoration: 'none',
-            transition: 'color 0.2s', display: 'none',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = '#f1f5f9'}
-          onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
-          >{link}</a>
-        ))}
+        {/* Desktop nav links — hidden on mobile via CSS */}
+        <div className="lp-nav-actions" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span className="nav-download-link">
+            <MagneticButton variant="ghost" href="/download">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                Download App <NavAndroidIcon /> <NavAppleIcon />
+              </span>
+            </MagneticButton>
+          </span>
+          {user ? (
+            <MagneticButton variant="primary" onClick={() => navigate('/student/dashboard')}>
+              Dashboard →
+            </MagneticButton>
+          ) : (
+            <>
+              <MagneticButton variant="ghost" href="/login">Sign In</MagneticButton>
+              <MagneticButton variant="primary" href="/register">Get Started Free →</MagneticButton>
+            </>
+          )}
+        </div>
 
-        {/* Mobile-app download CTA — visible to everyone, signed-in or not.
-            Uses the same MagneticButton chrome as Sign In / Get Started Free
-            for visual parity, with the Android + Apple marks reading as a
-            compact platform-availability hint. Hidden on narrow viewports
-            to keep the nav from crowding. */}
-        <span className="nav-download-link">
-          <MagneticButton variant="ghost" href="/download">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              Download App
-              <NavAndroidIcon />
-              <NavAppleIcon />
-            </span>
-          </MagneticButton>
-        </span>
+        {/* Mobile hamburger — shown only on mobile via CSS */}
+        <button
+          className={`lp-hamburger${mobileOpen ? ' open' : ''}`}
+          onClick={() => setMobileOpen(v => !v)}
+          aria-label="Toggle navigation"
+        >
+          <span /><span /><span />
+        </button>
+      </nav>
 
-        {user ? (
-          <MagneticButton variant="primary" onClick={() => navigate('/student/dashboard')}>
-            Dashboard →
-          </MagneticButton>
-        ) : (
-          <>
-            <MagneticButton variant="ghost" href="/login">Sign In</MagneticButton>
-            <MagneticButton variant="primary" href="/register">Get Started Free →</MagneticButton>
-          </>
+      {/* Mobile menu drawer */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            style={{
+              position: 'fixed', top: 64, left: 0, right: 0, zIndex: 999,
+              background: 'rgba(5,5,14,0.98)', backdropFilter: 'blur(24px)',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              padding: '16px 20px 28px',
+              display: 'flex', flexDirection: 'column', gap: 6,
+            }}
+          >
+            {user ? (
+              <button
+                onClick={() => { navigate('/student/dashboard'); setMobileOpen(false) }}
+                style={{
+                  width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+                  background: 'linear-gradient(135deg,#6366f1,#a855f7)', color: '#fff',
+                  fontSize: '1rem', fontWeight: 700, cursor: 'pointer',
+                  fontFamily: "'Space Grotesk', sans-serif",
+                }}>Dashboard →</button>
+            ) : (
+              <>
+                <a href="/register" onClick={() => setMobileOpen(false)} style={{
+                  display: 'block', textAlign: 'center', padding: '14px',
+                  borderRadius: 12, background: 'linear-gradient(135deg,#6366f1,#a855f7)',
+                  color: '#fff', textDecoration: 'none', fontSize: '1rem', fontWeight: 700,
+                  fontFamily: "'Space Grotesk', sans-serif",
+                }}>🚀 Get Started Free</a>
+                <a href="/login" onClick={() => setMobileOpen(false)} style={{
+                  display: 'block', textAlign: 'center', padding: '13px',
+                  borderRadius: 12, background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#cbd5e1', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 600,
+                  fontFamily: "'Space Grotesk', sans-serif",
+                }}>Sign In</a>
+              </>
+            )}
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', margin: '6px 0' }} />
+            {[['Features', '#features'], ['How It Works', '#how-it-works'], ['Company Prep', '#company-prep']].map(([label, href]) => (
+              <a key={label} href={href} onClick={() => setMobileOpen(false)} style={{
+                display: 'block', padding: '11px 14px', borderRadius: 10,
+                color: '#64748b', textDecoration: 'none',
+                fontSize: '0.92rem', fontWeight: 500,
+                fontFamily: "'Space Grotesk', sans-serif",
+              }}>{label}</a>
+            ))}
+          </motion.div>
         )}
-      </div>
-
-      <style>{`
-        @media (max-width: 520px) {
-          .nav-download-link { display: none !important; }
-        }
-      `}</style>
-    </nav>
+      </AnimatePresence>
+    </>
   )
 }
 
@@ -170,7 +221,7 @@ function InterviewMockup() {
   }, [])
 
   return (
-    <div style={{
+    <div className="lp-mockup" style={{
       width: '100%', maxWidth: 520,
       background: 'rgba(8,8,18,0.85)',
       border: '1px solid rgba(99,102,241,0.25)',
@@ -361,7 +412,7 @@ function HeroSection() {
   }, [])
 
   return (
-    <section style={{
+    <section className="lp-hero" style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center',
       padding: '100px 64px 80px', maxWidth: 1360, margin: '0 auto',
       gap: 80, position: 'relative',
@@ -382,7 +433,7 @@ function HeroSection() {
       ))}
 
       {/* LEFT — copy */}
-      <div style={{ flex: '1 1 0', minWidth: 0, position: 'relative', zIndex: 1 }}>
+      <div className="lp-hero-copy" style={{ flex: '1 1 0', minWidth: 0, position: 'relative', zIndex: 1 }}>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -447,6 +498,7 @@ function HeroSection() {
 
         {/* Stats */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.85 }}
+          className="lp-hero-stats"
           style={{
             display: 'flex', gap: 40, paddingTop: 32,
             borderTop: '1px solid rgba(255,255,255,0.07)',
@@ -473,6 +525,7 @@ function HeroSection() {
 
       {/* RIGHT — mockup */}
       <motion.div
+        className="lp-hero-mockup-wrap"
         initial={{ opacity: 0, x: 48, scale: 0.96 }} animate={{ opacity: 1, x: 0, scale: 1 }}
         transition={{ duration: 0.9, ease, delay: 0.2 }}
         style={{ flex: '0 0 auto', width: 'clamp(380px, 40%, 520px)', position: 'relative', zIndex: 1 }}
@@ -489,6 +542,7 @@ function HeroSection() {
         {/* Floating tag */}
         <motion.div
           animate={{ y: [0, -6, 0] }} transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+          className="lp-mockup-tag lp-mockup-tag--top"
           style={{
             position: 'absolute', top: -18, right: -20,
             background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)',
@@ -500,6 +554,7 @@ function HeroSection() {
         </motion.div>
         <motion.div
           animate={{ y: [0, 5, 0] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          className="lp-mockup-tag lp-mockup-tag--bottom"
           style={{
             position: 'absolute', bottom: 24, left: -28,
             background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.35)',
@@ -743,7 +798,7 @@ function FeatureCard({ feature, inView }) {
 function FeaturesSection() {
   const { ref, inView } = useInView(0.08)
   return (
-    <section id="features" style={{ padding: '120px 64px', maxWidth: 1360, margin: '0 auto' }}>
+    <section id="features" className="lp-section lp-features" style={{ padding: '120px 64px', maxWidth: 1360, margin: '0 auto' }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
         style={{ textAlign: 'center', marginBottom: 64 }}>
         <div style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#818cf8', marginBottom: 14 }}>
@@ -765,7 +820,7 @@ function FeaturesSection() {
         </p>
       </motion.div>
 
-      <div ref={ref} style={{
+      <div ref={ref} className="lp-features-grid" style={{
         display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 18,
       }}>
         {FEATURES.map((f, i) => <FeatureCard key={i} feature={f} inView={inView} />)}
@@ -810,7 +865,7 @@ function HowItWorks() {
         </p>
       </motion.div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+      <div className="lp-how-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
         {STEPS.map((s, i) => (
           <motion.div key={s.n}
             initial={{ opacity: 0, y: 36 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -866,7 +921,7 @@ function CompanyIntelSection() {
     <section id="company-prep" ref={ref} style={{
       padding: '120px 64px', maxWidth: 1360, margin: '0 auto',
     }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'center' }}>
+      <div className="lp-company-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'center' }}>
         {/* Left — copy */}
         <motion.div initial={{ opacity: 0, x: -32 }} animate={inView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.7, ease }}>
           <div style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#818cf8', marginBottom: 14 }}>
@@ -1012,7 +1067,7 @@ function ScorecardPreview() {
         </p>
       </motion.div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 18, maxWidth: 900, margin: '0 auto' }}>
+      <div className="lp-scorecard-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 18, maxWidth: 900, margin: '0 auto' }}>
         {SCORECARD_SECTIONS.map(({ label, score, color, icon, items }, i) => (
           <motion.div key={label}
             initial={{ opacity: 0, scale: 0.96 }} animate={inView ? { opacity: 1, scale: 1 } : {}}
@@ -1063,14 +1118,16 @@ function ScorecardPreview() {
 function CTASection() {
   const { ref, inView } = useInView(0.2)
   return (
-    <section ref={ref} style={{ padding: '80px 64px 120px', maxWidth: 1000, margin: '0 auto', textAlign: 'center' }}>
+    <section ref={ref} className="lp-cta-section" style={{ padding: '80px 64px 120px', maxWidth: 1000, margin: '0 auto', textAlign: 'center' }}>
       <motion.div
+        className="lp-cta-inner"
         initial={{ opacity: 0, y: 32, scale: 0.97 }} animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
         transition={{ duration: 0.7, ease }}
         style={{
           position: 'relative', borderRadius: 28, padding: '72px 48px',
           background: 'rgba(10,10,20,0.5)', overflow: 'hidden',
           backdropFilter: 'blur(20px)',
+          // responsive via .lp-cta-inner CSS class
         }}>
         {/* Animated gradient border */}
         <div style={{
@@ -1133,7 +1190,7 @@ function CTASection() {
 /* ─── FOOTER ─────────────────────────────────────────────────────────────────── */
 function Footer() {
   return (
-    <footer style={{
+    <footer className="lp-footer-wrap" style={{
       borderTop: '1px solid rgba(255,255,255,0.06)', padding: '32px 64px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       flexWrap: 'wrap', gap: 16, color: '#475569', fontSize: '0.82rem',

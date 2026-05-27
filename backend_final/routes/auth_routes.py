@@ -105,6 +105,103 @@ def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     )
 
 
+class GoogleAuthRequest(BaseModel):
+    """The frontend posts the credential it received from Google Identity
+    Services (the JWT `id_token`). We never see the user's Google password."""
+    id_token: str
+    role: Optional[str] = "student"
+
+
+@router.post("/google", response_model=schemas.TokenResponse)
+def google_auth(
+    payload: GoogleAuthRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Sign in (or sign up) with a Google ID token.
+
+    Verifies the Google JWT against Google's keys + our audience (client ID),
+    upserts the user by email, and returns the same TokenResponse shape as
+    the email/password endpoints so the frontend path is unchanged.
+    """
+    from config import settings as _settings
+    if not _settings.GOOGLE_CLIENT_ID:
+        # Surfaced to the frontend so it can hide the Google button when the
+        # backend isn't configured yet — better UX than a confusing 500.
+        raise HTTPException(status_code=503, detail="Google sign-in not configured on this server.")
+
+    try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Server missing google-auth dependency.")
+
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            payload.id_token,
+            google_requests.Request(),
+            _settings.GOOGLE_CLIENT_ID,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Google credential: {e}")
+
+    email = _normalize_email(idinfo.get("email") or "")
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email on file.")
+    if not idinfo.get("email_verified", False):
+        raise HTTPException(status_code=400, detail="Verify your Google email before signing in.")
+
+    name = (idinfo.get("name") or idinfo.get("given_name") or email.split("@")[0]).strip()
+
+    # Case-insensitive lookup so legacy mixed-case rows match
+    from sqlalchemy import func
+    user = db.query(models.User).filter(func.lower(models.User.email) == email).first()
+    created = False
+    if not user:
+        import random
+        colors = ["#6366f1", "#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b"]
+        user = models.User(
+            email=email,
+            name=name,
+            # Google users don't have a password — store an unusable hash so
+            # any future /login attempt with this email fails cleanly. Users
+            # who later set a password via "forgot password" can overwrite it.
+            hashed_password="!google-oauth-no-password!",
+            role=(payload.role or "student") if payload.role in ("student", "admin") else "student",
+            avatar_color=random.choice(colors),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        created = True
+
+    user.last_active = datetime.utcnow()
+    db.commit()
+
+    # First-time Google sign-up gets the same welcome email as the
+    # email/password flow — keeps the email pipeline uniform.
+    if created:
+        background_tasks.add_task(send_welcome_email, user, "google")
+
+    token = create_access_token({"sub": str(user.id)})
+    return schemas.TokenResponse(
+        access_token=token,
+        user=schemas.UserResponse.model_validate(user),
+    )
+
+
+@router.get("/oauth-providers")
+def oauth_providers():
+    """Tell the frontend which OAuth providers are usable on this backend so
+    the UI can hide buttons that would 503. Public — no auth required."""
+    from config import settings as _settings
+    return {
+        "google": bool(_settings.GOOGLE_CLIENT_ID),
+        "apple": False,  # Wire-only for now — flips true when Apple Sign-In is configured.
+        "google_client_id": _settings.GOOGLE_CLIENT_ID or None,
+    }
+
+
 @router.get("/me", response_model=schemas.UserResponse)
 def get_me(current_user: models.User = Depends(get_current_user)):
     return schemas.UserResponse.model_validate(current_user)

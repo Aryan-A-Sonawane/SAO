@@ -63,6 +63,18 @@ export function AuthProvider({ children }) {
     return userData
   }
 
+  // Apply a token+user pair from an OAuth flow (Google today, Apple later).
+  // Mirrors what login()/register() do internally so the rest of the app
+  // doesn't need to know how the session was established.
+  const applyToken = (access_token, userData) => {
+    if (!access_token || !userData) return
+    sessionStorage.removeItem('demo_user')
+    localStorage.setItem('sf_token', access_token)
+    localStorage.setItem('sf_user', JSON.stringify(userData))
+    setUser(userData)
+    setIsDemoMode(false)
+  }
+
   const logout = () => {
     localStorage.removeItem('sf_token')
     localStorage.removeItem('sf_user')
@@ -99,7 +111,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, login, register, logout, refreshUser, loading,
+      user, login, register, applyToken, logout, refreshUser, loading,
       isDemoMode, enterDemoMode, exitDemoMode
     }}>
       {children}

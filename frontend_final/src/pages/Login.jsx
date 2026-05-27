@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import OAuthButtons from '../components/auth/OAuthButtons'
 import '../styles/auth-premium.css'
 
 /* ─── Typewriter text effect (ReactBits-inspired) ───────────────────────── */
@@ -185,6 +186,14 @@ export default function Login() {
               )}
             </button>
           </form>
+
+          {/* OAuth providers — Google live, Apple wire-only for now.
+              Component self-hides when the backend has neither configured. */}
+          <OAuthButtons
+            onAuthed={(u) => {
+              navigate(u?.role === 'admin' ? '/admin/dashboard' : '/student/dashboard')
+            }}
+          />
 
           <div className="auth-footer">
             No account?{' '}

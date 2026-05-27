@@ -20,6 +20,7 @@ from database import get_db
 from services.interview_report_service import build_report, build_communication_analysis
 from services.interview_pdf_service import build_interview_report_pdf
 from services.skill_profile_service import upsert_score
+from services.email_service import send_interview_report_email
 
 router = APIRouter(prefix="/api/interviews", tags=["Interview Sessions"])
 
@@ -248,6 +249,44 @@ def download_session_report_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/sessions/{session_id}/email-report")
+def email_session_report(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Email the interview report (with PDF attachment) to the user.
+
+    Triggered when the user clicks "Email me this report" on the report page.
+    Privacy-conscious by design — never auto-sent. We render the PDF inline
+    and pass the bytes to the email service.
+    """
+    s = (
+        db.query(models.InterviewSession)
+        .filter(
+            models.InterviewSession.id == session_id,
+            models.InterviewSession.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="Interview session not found.")
+    if not (current_user.email or "").strip():
+        raise HTTPException(status_code=400, detail="Add an email address to your profile first.")
+
+    try:
+        pdf_bytes = build_interview_report_pdf(s)
+    except Exception as e:
+        # PDF failure shouldn't block the email entirely — send the HTML
+        # without the attachment so the link still works.
+        pdf_bytes = None
+
+    ok = send_interview_report_email(current_user, s, pdf_bytes=pdf_bytes)
+    if not ok:
+        raise HTTPException(status_code=502, detail="Could not send the email right now. Please try again.")
+    return {"success": True, "sent_to": current_user.email}
 
 
 @router.delete("/sessions/{session_id}")

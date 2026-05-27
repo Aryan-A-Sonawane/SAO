@@ -87,6 +87,23 @@ export default function InterviewReport() {
     }
   }
 
+  // Item 27: send the report to the signed-in user's email (privacy-conscious
+  // — only fires on explicit click here, never auto-sent at session end).
+  const [emailing, setEmailing] = useState(false)
+  const handleEmailReport = async () => {
+    if (!session?.id) return
+    setEmailing(true)
+    try {
+      const { interviewSessionsApi } = await import('@/api/client')
+      const res = await interviewSessionsApi.emailReport(session.id)
+      toast.success(`Sent to ${res.sent_to || 'your email'}`)
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Could not email the report.')
+    } finally {
+      setEmailing(false)
+    }
+  }
+
   const categoryData = useMemo(() => {
     const cs = report.category_scores || {}
     return Object.entries(cs).map(([k, v]) => {
@@ -196,7 +213,7 @@ export default function InterviewReport() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Button
               variant="outline"
               size="sm"
@@ -210,6 +227,21 @@ export default function InterviewReport() {
                 <Download className="h-4 w-4" />
               )}
               {downloading ? 'Building PDF…' : 'Download PDF'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEmailReport}
+              disabled={emailing}
+              className="border-border/60 bg-card/40"
+              title="Send this report (with PDF attached) to your account email"
+            >
+              {emailing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageSquare className="h-4 w-4" />
+              )}
+              {emailing ? 'Sending…' : 'Email me this'}
             </Button>
             <ScoreOrb score={overall} verdict={verdict} />
           </div>

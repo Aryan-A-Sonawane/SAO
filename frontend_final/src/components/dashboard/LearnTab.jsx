@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain,
+  Building2,
+  Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -12,6 +15,7 @@ import {
   Headphones,
   Loader2,
   PlayCircle,
+  Plus,
   RefreshCw,
   Sparkles,
   Target,
@@ -29,14 +33,26 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
+import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/context/AuthContext'
 
 import {
+  useAllLearningPaths,
   useGenerateQuiz,
   useInterviewHistory,
   useLearningPath,
   useSkillProfile,
   useSubmitQuiz,
+  useSwitchRole,
   useUpdateTopicStatus,
 } from '@/lib/queries'
 
@@ -66,12 +82,28 @@ export default function LearnTab({ user, dailyPlan }) {
   const pathQuery = useLearningPath(undefined, { retry: false })
   const skillQuery = useSkillProfile({ retry: false })
   const historyQuery = useInterviewHistory({ limit: 3, offset: 0 }, { retry: false })
+  const allPathsQuery = useAllLearningPaths({ retry: false })
+  const switchRole = useSwitchRole()
+  const { refreshUser } = useAuth()
 
   const path = pathQuery.data
   const stats = path?.stats
   const role = path?.job_role || ''
   const greenTopics = path?.green_topics || []
   const yellowTopics = path?.yellow_topics || []
+  const allPaths = allPathsQuery.data?.paths || []
+  const targetCompany = path?.company || ''
+
+  const handleSwitchRole = async (jobRole) => {
+    if (!jobRole || jobRole === role) return
+    try {
+      const res = await switchRole.mutateAsync(jobRole)
+      await refreshUser()
+      toast.success(`Switched to ${res.role_title}`)
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Could not switch role')
+    }
+  }
 
   const inProgress = useMemo(
     () => greenTopics.filter((t) => t.status === 'in_progress').slice(0, 3),
@@ -187,31 +219,173 @@ export default function LearnTab({ user, dailyPlan }) {
             )}
           </div>
 
-          {/* Right side — CTAs */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 200 }}>
+          {/* Right side — Role switcher + Add role + Company plan
+              Replaces the old triple-CTA stack (Learning Hub / Interview /
+              Personalise) since those destinations are one nav-bar tap away.
+              This space is now an actionable identity tile: who are you
+              prepping as, and for which company.
+              ────────────────────────────────────────────────────────────── */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 10,
+            minWidth: 240, flex: '0 0 auto',
+          }}>
+            {/* Role switcher — only renders the dropdown when the user has
+                more than one role on file; otherwise shows a clean read-only
+                pill so single-role users aren't confused. */}
+            {allPaths.length > 1 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
+                      background: 'rgba(99,102,241,0.10)',
+                      border: '1px solid rgba(99,102,241,0.28)',
+                      color: 'var(--dk-text)', width: '100%', textAlign: 'left',
+                      fontFamily: 'inherit', transition: 'all 0.2s',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>{path.role_icon}</span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        fontSize: '0.62rem', textTransform: 'uppercase',
+                        letterSpacing: '0.14em', color: 'var(--dk-text-muted)',
+                      }}>
+                        Active role
+                      </div>
+                      <div style={{
+                        fontSize: '0.86rem', fontWeight: 700,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {path.role_title}
+                      </div>
+                    </div>
+                    <ChevronDown size={14} color="var(--dk-text-muted)" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={6} className="w-64">
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    Switch active role
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {allPaths.map((p) => (
+                    <DropdownMenuItem
+                      key={p.job_role}
+                      onSelect={() => handleSwitchRole(p.job_role)}
+                      className="flex items-center gap-2.5 px-2 py-2"
+                    >
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary/60 text-base">
+                        {p.role_icon}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-foreground">{p.role_title}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {p.total_green ?? 0} core · {p.total_yellow ?? 0} stretch
+                        </div>
+                      </div>
+                      {p.is_active && <Check className="h-4 w-4 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => navigate('/onboarding?add=1')}
+                    className="gap-2 px-2 py-2 text-primary focus:text-primary"
+                  >
+                    <Plus className="h-4 w-4" /> Add another role
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', borderRadius: 12,
+                background: 'rgba(99,102,241,0.10)',
+                border: '1px solid rgba(99,102,241,0.28)',
+              }}>
+                <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>{path.role_icon}</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{
+                    fontSize: '0.62rem', textTransform: 'uppercase',
+                    letterSpacing: '0.14em', color: 'var(--dk-text-muted)',
+                  }}>
+                    Active role
+                  </div>
+                  <div style={{
+                    fontSize: '0.86rem', fontWeight: 700, color: 'var(--dk-text)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {path.role_title}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Add another role — always visible. Hits /onboarding?add=1
+                which already supports add-role flow (skips welcome banner,
+                drops you straight into role selection). */}
             <button
-              onClick={() => navigate('/learn')}
-              className="dk-btn dk-btn-primary"
+              onClick={() => navigate('/onboarding?add=1')}
               style={{
-                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                justifyContent: 'flex-start', padding: '12px 18px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px dashed rgba(255,255,255,0.15)',
+                color: 'var(--dk-text-muted)', width: '100%',
+                fontSize: '0.78rem', fontWeight: 600, fontFamily: 'inherit',
+                transition: 'all 0.2s',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(99,102,241,0.06)'
+                e.currentTarget.style.borderColor = 'rgba(99,102,241,0.35)'
+                e.currentTarget.style.color = '#a5b4fc'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'
+                e.currentTarget.style.color = 'var(--dk-text-muted)'
               }}
             >
-              <PlayCircle size={16} /> Open Learning Hub
+              <Plus size={14} /> Add another role
             </button>
-            <button
-              onClick={() => navigate('/interview')}
-              className="dk-btn dk-btn-ghost"
-              style={{ justifyContent: 'flex-start', padding: '12px 18px' }}
-            >
-              <Headphones size={16} /> Mock Interview
-            </button>
+
+            {/* Company plan — shows the currently-targeted company if one is
+                set, else nudges the user to pick one. Tap either state → /plan.
+                Replaces the buried sidebar entry point with something a user
+                actually sees from the dashboard. */}
             <button
               onClick={() => navigate('/plan')}
-              className="dk-btn dk-btn-ghost"
-              style={{ justifyContent: 'flex-start', padding: '12px 18px' }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
+                background: targetCompany ? 'rgba(168,85,247,0.08)' : 'rgba(255,255,255,0.03)',
+                border: '1px solid ' + (targetCompany ? 'rgba(168,85,247,0.28)' : 'rgba(255,255,255,0.08)'),
+                color: 'var(--dk-text)', width: '100%', textAlign: 'left',
+                fontFamily: 'inherit', transition: 'all 0.2s',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)' }}
             >
-              <Sparkles size={16} /> Personalise
+              <Building2 size={16} color={targetCompany ? '#c084fc' : 'var(--dk-text-muted)'} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{
+                  fontSize: '0.62rem', textTransform: 'uppercase',
+                  letterSpacing: '0.14em', color: 'var(--dk-text-muted)',
+                }}>
+                  {targetCompany ? 'Target company' : 'Company plan'}
+                </div>
+                <div style={{
+                  fontSize: '0.84rem', fontWeight: 700,
+                  color: targetCompany ? '#e9d5ff' : 'var(--dk-text)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {targetCompany || 'Personalise for a company →'}
+                </div>
+              </div>
+              {targetCompany && (
+                <ChevronRight size={14} color="var(--dk-text-muted)" />
+              )}
             </button>
           </div>
         </div>

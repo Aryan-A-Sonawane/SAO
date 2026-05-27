@@ -242,8 +242,16 @@ function ResumeStat({ label, value }) {
 
 export default function Profile() {
   const { t } = useLang()
-  const { user } = useAuth()
+  const { user, logout, isDemoMode, exitDemoMode } = useAuth()
   const navigate = useNavigate()
+  // Account section: confirm gate before actual logout so an accidental tap
+  // on a small mobile target doesn't immediately end the session.
+  const [confirmingLogout, setConfirmingLogout] = useState(false)
+  const handleSignOut = () => {
+    if (isDemoMode) exitDemoMode()
+    else logout()
+    navigate('/')
+  }
   const [form, setForm] = useState({ name: '', college: '', phone: '', bio: '', preferred_language: 'en' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -402,6 +410,88 @@ export default function Profile() {
             </button>
           </div>
         </form>
+
+        {/* ── Account / Sign-out card ───────────────────────────────────────
+            Primary logout surface on mobile (the desktop sidebar already has
+            a sign-out button, but MobileNav doesn't). Confirm-on-tap so a
+            misfire on a small target doesn't end the session.
+            ──────────────────────────────────────────────────────────────── */}
+        <div className="dk-spotlight-card" style={{
+          marginTop: 28, padding: 22,
+          border: '1px solid rgba(248,113,113,0.18)',
+          background: 'rgba(248,113,113,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{
+              width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+              background: 'rgba(248,113,113,0.12)', color: '#fca5a5',
+              display: 'grid', placeItems: 'center', fontSize: '1.2rem',
+            }}>
+              {isDemoMode ? '🚀' : '🚪'}
+            </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--dk-text)', letterSpacing: '-0.01em' }}>
+                {isDemoMode ? 'Exit demo mode' : 'Sign out'}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--dk-text-muted)', marginTop: 3, lineHeight: 1.5 }}>
+                {isDemoMode
+                  ? 'Leave the demo account. Your real session (if any) will remain untouched.'
+                  : 'You\'ll need to sign back in to continue. Your data stays safe.'}
+              </div>
+            </div>
+
+            {!confirmingLogout ? (
+              <button
+                type="button"
+                onClick={() => setConfirmingLogout(true)}
+                style={{
+                  padding: '9px 18px', borderRadius: 10, cursor: 'pointer',
+                  background: 'rgba(248,113,113,0.10)',
+                  border: '1px solid rgba(248,113,113,0.28)',
+                  color: '#fca5a5', fontSize: '0.82rem', fontWeight: 700,
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  letterSpacing: '-0.01em', transition: 'all 0.2s',
+                  WebkitTapHighlightColor: 'transparent',
+                  minHeight: 40,
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(248,113,113,0.18)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(248,113,113,0.10)'}
+              >
+                {isDemoMode ? '🚀 Exit demo' : '🚪 Sign out'}
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingLogout(false)}
+                  style={{
+                    padding: '9px 16px', borderRadius: 10, cursor: 'pointer',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'var(--dk-text)', fontSize: '0.82rem', fontWeight: 600,
+                    minHeight: 40,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  style={{
+                    padding: '9px 18px', borderRadius: 10, cursor: 'pointer',
+                    background: 'linear-gradient(135deg, #ef4444, #f87171)',
+                    border: 'none', color: '#fff',
+                    fontSize: '0.82rem', fontWeight: 700,
+                    minHeight: 40,
+                    boxShadow: '0 6px 18px -6px rgba(239,68,68,0.55)',
+                  }}
+                >
+                  {isDemoMode ? 'Yes, exit demo' : 'Yes, sign me out'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </DarkLayout>
   )

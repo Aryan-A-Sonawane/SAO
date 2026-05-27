@@ -836,40 +836,142 @@
   100% { transform: scale(1.6); opacity: 0; }
 }
 
-/* Feature bento — responsive grid */
-@media (max-width: 1100px) {
-  /* force all feature cards to full width on tablet */
-  [style*="grid-column: span 7"],
-  [style*="grid-column: span 5"],
-  [style*="grid-column: span 4"] {
-    grid-column: span 12 !important;
-  }
+/* ═══════════════════════════════════════════════════════════════════════════
+   HAMBURGER + MOBILE NAV
+   ═══════════════════════════════════════════════════════════════════════════ */
+.lp-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  z-index: 1001;
+  flex-shrink: 0;
+}
+.lp-hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #f1f5f9;
+  border-radius: 2px;
+  transition: transform 0.28s ease, opacity 0.2s ease;
+  transform-origin: center;
+}
+.lp-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.lp-hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+.lp-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BREAKPOINT: TABLET  ≤ 1024px
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .lp-nav { padding: 0 28px !important; }
+  .lp-section, .lp-playground-wrap { padding-left: 28px; padding-right: 28px; }
+  .lp-features { padding: 80px 28px !important; }
+  #how-it-works, #company-prep { padding-left: 28px !important; padding-right: 28px !important; }
+  .lp-cta-section { padding: 60px 28px 80px !important; }
+  .lp-footer-wrap { padding: 28px 28px !important; }
+
+  /* Feature bento: collapse uneven spans to full-width at tablet */
+  .lp-features-grid > * { grid-column: span 12 !important; }
 }
 
-/* Hero split → stack on mobile */
+/* ═══════════════════════════════════════════════════════════════════════════
+   BREAKPOINT: TABLET  ≤ 900px
+   ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
-  /* hero section becomes single column */
-  section[style*="gap: 80px"] {
+  /* Hero: stack copy above mockup */
+  .lp-hero {
     flex-direction: column !important;
-    gap: 48px !important;
-    padding: 100px 24px 60px !important;
+    padding: 96px 24px 56px !important;
+    gap: 40px !important;
+    align-items: flex-start !important;
   }
-  /* mockup takes full width */
-  section[style*="gap: 80px"] > div:last-child {
+  .lp-hero-copy {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .lp-hero-mockup-wrap {
     width: 100% !important;
     max-width: 100% !important;
+    flex: none !important;
   }
-  /* how-it-works grid → 1 col */
-  section[id="how-it-works"] > div:last-child {
-    grid-template-columns: 1fr !important;
+  /* Hide floating mockup tags — they overflow at narrow widths */
+  .lp-mockup-tag--top,
+  .lp-mockup-tag--bottom { display: none !important; }
+
+  /* How-it-works: 2-col on tablet */
+  .lp-how-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 14px !important;
   }
-  /* company intel → 1 col */
-  section[id="company-prep"] > div {
+
+  /* Company intel: single column */
+  .lp-company-grid {
     grid-template-columns: 1fr !important;
+    gap: 36px !important;
+  }
+
+  /* Section paddings */
+  #how-it-works { padding: 72px 24px !important; }
+  #company-prep { padding: 72px 24px !important; }
+  #features     { padding: 72px 24px !important; }
+  .lp-cta-section { padding: 48px 24px 72px !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BREAKPOINT: MOBILE  ≤ 640px
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Navbar */
+  .lp-nav { padding: 0 16px !important; height: 56px !important; }
+  .lp-nav-actions { display: none !important; }
+  .lp-hamburger { display: flex !important; }
+
+  /* Hero */
+  .lp-hero {
+    padding: 80px 16px 44px !important;
     gap: 32px !important;
   }
-  /* scorecard → 1 col */
-  section > div[style*="grid-template-columns: repeat(2, 1fr)"] {
-    grid-template-columns: 1fr !important;
+  .lp-hero-stats { gap: 20px !important; padding-top: 24px !important; }
+
+  /* How-it-works: single column on mobile */
+  .lp-how-grid { grid-template-columns: 1fr !important; }
+
+  /* Scorecard: single column on mobile */
+  .lp-scorecard-grid { grid-template-columns: 1fr !important; }
+
+  /* CTA card: tighter padding */
+  .lp-cta-inner {
+    padding: 40px 20px !important;
+    border-radius: 20px !important;
   }
+  .lp-cta-section { padding: 32px 16px 60px !important; }
+
+  /* Section paddings */
+  #how-it-works { padding: 56px 16px !important; }
+  #company-prep { padding: 56px 16px !important; }
+  #features     { padding: 56px 16px !important; }
+  .lp-section   { padding: 56px 16px !important; }
+
+  /* Footer */
+  .lp-footer-wrap {
+    padding: 24px 16px !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+  }
+
+  /* Stats strip */
+  .lp-stats-strip { gap: 20px; }
+
+  /* Feature bento: reduce padding on small cards */
+  .lp-features-grid > * { padding: 22px !important; }
+
+  /* Download App nav link — too wide for mobile nav (hidden via .lp-nav-actions anyway) */
+  .nav-download-link { display: none !important; }
 }
